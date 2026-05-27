@@ -1,11 +1,6 @@
-mod download;
-mod forms;
-mod shell;
-mod status;
-mod titlebar;
+//! The components module contains all shared components for our app. Components are the building blocks of dioxus apps.
+//! They can be used to defined common UI elements like buttons, forms, and modals. In this template, we define a Hero
+//! component  to be used in our app.
 
-pub(crate) use download::*;
-pub(crate) use forms::*;
-pub(crate) use shell::*;
-pub(crate) use status::*;
-pub(crate) use titlebar::*;
+mod hero;
+pub use hero::Hero;

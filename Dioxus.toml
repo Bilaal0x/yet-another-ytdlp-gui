@@ -1,21 +1,21 @@
 [application]
-name = "yaydlp"
-
-[bundle]
-identifier = "com.bilal.yaydlp"
-publisher = "Bilal"
-short_description = "A desktop downloader for yt-dlp workflows"
 
 [web.app]
 
+# HTML title tag content
 title = "yaydlp"
 
+# include `assets` in web platform
 [web.resource]
 
+# Additional CSS style files
 style = []
 
+# Additional JavaScript files
 script = []
 
 [web.resource.dev]
 
+# Javascript code file
+# serve: [dev-server] only
 script = []
