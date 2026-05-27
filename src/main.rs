@@ -1,19 +1,6 @@
 use dioxus::prelude::*;
 
-use views::{Blog, Home, Navbar};
-
-mod components;
-mod views;
-
-#[derive(Debug, Clone, Routable, PartialEq)]
-#[rustfmt::skip]
-enum Route {
-    #[layout(Navbar)]
-        #[route("/")]
-        Home {},
-        #[route("/blog/:id")]
-        Blog { id: i32 },
-}
+mod app;
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
@@ -50,6 +37,6 @@ fn App() -> Element {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         document::Link { rel: "stylesheet", href: TAILWIND_CSS }
 
-        Router::<Route> {}
+        app::FetchApp {}
     }
 }
