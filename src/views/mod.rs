@@ -1,18 +1,34 @@
-//! The views module contains the components for all Layouts and Routes for our app. Each layout and route in our [`Route`]
-//! enum will render one of these components.
-//!
-//!
-//! The [`Home`] and [`Blog`] components will be rendered when the current route is [`Route::Home`] or [`Route::Blog`] respectively.
-//!
-//!
-//! The [`Navbar`] component will be rendered on all pages of our app since every page is under the layout. The layout defines
-//! a common wrapper around all child routes.
+use super::*;
 
+mod advanced;
+mod audio;
+mod error;
+mod format;
 mod home;
-pub use home::Home;
+mod library;
+mod naming;
+mod playlist;
+mod presets;
+mod queue;
+mod ready;
+mod settings;
 
-mod blog;
-pub use blog::Blog;
+#[component]
+pub(crate) fn ActiveView() -> Element {
+    let ctx = use_context::<FetchContext>();
 
-mod navbar;
-pub use navbar::Navbar;
+    match (ctx.screen)() {
+        Screen::Home => rsx! { home::HomeView {} },
+        Screen::Ready => rsx! { ready::ReadyView {} },
+        Screen::Format => rsx! { format::FormatView {} },
+        Screen::Audio => rsx! { audio::AudioView {} },
+        Screen::Playlist => rsx! { playlist::PlaylistView {} },
+        Screen::Naming => rsx! { naming::NamingView {} },
+        Screen::Queue => rsx! { queue::QueueView {} },
+        Screen::Library => rsx! { library::LibraryView {} },
+        Screen::Presets => rsx! { presets::PresetsView {} },
+        Screen::Advanced => rsx! { advanced::AdvancedView {} },
+        Screen::Settings => rsx! { settings::SettingsView {} },
+        Screen::Error => rsx! { error::ErrorView {} },
+    }
+}
