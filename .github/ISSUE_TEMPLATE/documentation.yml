@@ -1,0 +1,30 @@
+name: Documentation
+description: Report missing, unclear or outdated documentation.
+title: "docs: "
+labels: ["type:docs"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Documentation issue
+      description: What is missing, unclear, outdated or incorrect?
+      placeholder: The documentation should explain...
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Link to the file, section, issue or behavior this documentation should cover.
+      placeholder: README, setup instructions, release notes, etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: Add wording, structure or examples that would make this clearer.
+    validations:
+      required: false
