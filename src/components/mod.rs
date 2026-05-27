@@ -1,2 +1,5 @@
-mod hero;
-pub use hero::Hero;
+mod shell;
+mod titlebar;
+
+pub(crate) use shell::*;
+pub(crate) use titlebar::*;
