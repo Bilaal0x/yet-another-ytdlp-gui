@@ -25,7 +25,10 @@ pub(crate) fn PresetButton(index: usize, preset: Preset) -> Element {
                 ctx.download_type.set(preset.kind);
                 ctx.selected_format.set(preset.format_label.clone());
                 ctx.selected_audio_format.set(preset.audio_format.to_uppercase());
+                ctx.audio_quality.set(audio_quality_label(&preset.audio_quality));
                 ctx.container.set(preset.container.to_uppercase());
+                ctx.video_codec.set(default_video_codec(&preset.format_label).to_string());
+                ctx.resolution_cap.set(default_resolution_cap(&preset.format_label).to_string());
                 ctx.settings.with_mut(|settings| settings.file_template = preset.output_template.clone());
             },
             span { class: "preset-name", "{preset.name}" }

@@ -8,6 +8,7 @@ mod actions;
 mod backend;
 #[path = "components/mod.rs"]
 mod components;
+mod formatting;
 #[path = "i18n.rs"]
 mod i18n;
 mod storage;
@@ -16,6 +17,7 @@ mod views;
 
 pub(crate) use actions::*;
 pub(crate) use backend::*;
+pub(crate) use formatting::*;
 pub(crate) use storage::*;
 
 use components::{AppTitleBar, Sidebar, TopBar};
@@ -310,7 +312,10 @@ pub(crate) struct DownloadJob {
     download_type: DownloadType,
     format_label: String,
     audio_format: String,
+    audio_quality: String,
     container: String,
+    video_codec: String,
+    resolution_cap: String,
     output_folder: String,
     output_template: String,
     command_display: String,
