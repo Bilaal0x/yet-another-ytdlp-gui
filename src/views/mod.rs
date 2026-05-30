@@ -1,6 +1,8 @@
 use super::*;
 
+mod advanced;
 mod audio;
+mod error;
 mod format;
 mod home;
 mod library;
@@ -26,9 +28,9 @@ pub(crate) fn ActiveView() -> Element {
         Screen::Queue => rsx! { queue::QueueView {} },
         Screen::Library => rsx! { library::LibraryView {} },
         Screen::Presets => rsx! { presets::PresetsView {} },
-        Screen::Advanced => rsx! { ScreenPanel { screen: Screen::Advanced } },
+        Screen::Advanced => rsx! { advanced::AdvancedView {} },
         Screen::Settings => rsx! { settings::SettingsView {} },
-        Screen::Error => rsx! { ScreenPanel { screen: Screen::Error } },
+        Screen::Error => rsx! { error::ErrorView {} },
     }
 }
 

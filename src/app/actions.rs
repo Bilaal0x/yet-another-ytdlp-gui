@@ -209,6 +209,15 @@ pub(crate) fn clear_completed(mut ctx: FetchContext) {
         .with_mut(|jobs| jobs.retain(|job| job.status != JobStatus::Completed));
 }
 
+pub(crate) fn clear_history(mut ctx: FetchContext) {
+    ctx.jobs.with_mut(Vec::clear);
+}
+
+pub(crate) fn forget_cookie_file(mut ctx: FetchContext) {
+    ctx.settings
+        .with_mut(|settings| settings.cookie_file.clear());
+}
+
 pub(crate) fn select_preset(mut ctx: FetchContext, index: usize) {
     if (ctx.presets)().get(index).is_none() {
         return;
@@ -519,6 +528,20 @@ pub(crate) fn pick_output_folder(mut ctx: FetchContext) {
 
 #[cfg(not(feature = "desktop"))]
 pub(crate) fn pick_output_folder(_ctx: FetchContext) {}
+
+#[cfg(feature = "desktop")]
+pub(crate) fn pick_cookie_file(mut ctx: FetchContext) {
+    if let Some(path) = rfd::FileDialog::new()
+        .add_filter(i18n::t("cookie_files"), &["txt", "cookies"])
+        .pick_file()
+    {
+        ctx.settings
+            .with_mut(|settings| settings.cookie_file = path.display().to_string());
+    }
+}
+
+#[cfg(not(feature = "desktop"))]
+pub(crate) fn pick_cookie_file(_ctx: FetchContext) {}
 
 pub(crate) fn reveal_output(path: &str) {
     let path = std::path::Path::new(path);
