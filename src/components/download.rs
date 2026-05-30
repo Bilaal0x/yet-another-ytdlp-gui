@@ -191,7 +191,10 @@ pub(crate) fn DownloadRow(job: DownloadJob) -> Element {
 
 #[component]
 pub(crate) fn LibraryCard(job: DownloadJob) -> Element {
+    let ctx = use_context::<FetchContext>();
     let format_summary = library_format_summary(&job);
+    let output_hint = job.output_hint.clone();
+    let requeue = job.clone();
 
     rsx! {
         div { class: "library-card",
@@ -205,8 +208,14 @@ pub(crate) fn LibraryCard(job: DownloadJob) -> Element {
                 span { "{format_summary}" }
                 small { "{job.output_hint}" }
                 div { class: "card-actions library-actions",
-                    button { "{i18n::t(\"reveal\")}" }
-                    button { "{i18n::t(\"re_download\")}" }
+                    button {
+                        onclick: move |_| reveal_output(&output_hint),
+                        "{i18n::t(\"reveal\")}"
+                    }
+                    button {
+                        onclick: move |_| requeue_job(ctx, requeue.clone()),
+                        "{i18n::t(\"re_download\")}"
+                    }
                 }
             }
         }
@@ -233,17 +242,24 @@ pub(crate) fn ThumbnailBlock(class: String, src: String, fallback: String) -> El
 fn library_format_summary(job: &DownloadJob) -> String {
     match job.download_type {
         DownloadType::AudioOnly => format!(
-            "{} / {}",
+            "{} / {} {}",
             job.download_type.label(),
-            job.audio_format.to_uppercase()
+            job.audio_format.to_uppercase(),
+            job.audio_quality
         ),
         DownloadType::VideoOnly => format!(
-            "{} / {}",
+            "{} / {} / {}",
             job.download_type.label(),
-            job.container.to_uppercase()
+            job.video_codec,
+            job.resolution_cap
         ),
         DownloadType::FullVideo => {
-            format!("{} / {}", job.format_label, job.container.to_uppercase())
+            format!(
+                "{} / {} / {}",
+                localized_format_label(&job.format_label),
+                job.container.to_uppercase(),
+                job.resolution_cap
+            )
         }
     }
 }
