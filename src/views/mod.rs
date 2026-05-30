@@ -1,12 +1,14 @@
 use super::*;
 
+mod home;
+
 #[component]
 pub(crate) fn ActiveView() -> Element {
     let ctx = use_context::<FetchContext>();
     let _language = ctx.language();
 
     match (ctx.screen)() {
-        Screen::Home => rsx! { ScreenPanel { screen: Screen::Home } },
+        Screen::Home => rsx! { home::HomeView {} },
         Screen::Ready => rsx! { ScreenPanel { screen: Screen::Ready } },
         Screen::Format => rsx! { ScreenPanel { screen: Screen::Format } },
         Screen::Audio => rsx! { ScreenPanel { screen: Screen::Audio } },
