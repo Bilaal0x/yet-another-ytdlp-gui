@@ -1,8 +1,10 @@
 use super::super::*;
+use super::LanguageSelector;
 
 #[component]
 pub(crate) fn Sidebar() -> Element {
     let mut ctx = use_context::<FetchContext>();
+    let _language = ctx.language();
     let nav_items = [
         Screen::Home,
         Screen::Queue,
@@ -16,8 +18,8 @@ pub(crate) fn Sidebar() -> Element {
             div { class: "brand-block",
                 div { class: "brand-mark", "Y" }
                 div {
-                    div { class: "brand-name", "yaydlp" }
-                    div { class: "brand-subtitle", "Yet Another YT-DLP GUI" }
+                    div { class: "brand-name", "{i18n::t(\"app_name\")}" }
+                    div { class: "brand-subtitle", "{i18n::t(\"app_subtitle\")}" }
                 }
             }
 
@@ -33,13 +35,13 @@ pub(crate) fn Sidebar() -> Element {
             }
 
             div { class: "sidebar-panel",
-                div { class: "eyebrow", "Active preset" }
+                div { class: "eyebrow", "{i18n::t(\"active_preset\")}" }
                 div { class: "profile-name", "{ctx.active_preset().name}" }
-                p { "Every queue item will keep its own command, output path, status, and diagnostic log." }
+                p { "{i18n::t(\"active_preset_help\")}" }
                 button {
                     class: "text-button",
                     onclick: move |_| ctx.screen.set(Screen::Advanced),
-                    "Review command"
+                    "{i18n::t(\"review_command\")}"
                 }
             }
         }
@@ -49,8 +51,9 @@ pub(crate) fn Sidebar() -> Element {
 #[component]
 pub(crate) fn TopBar() -> Element {
     let mut ctx = use_context::<FetchContext>();
+    let language = ctx.language();
     let title = (ctx.screen)().label();
-    let crumb = format!("yaydlp Desktop / {title}");
+    let crumb = i18n::t_with("desktop_crumb", &[("title", title.clone())]);
 
     rsx! {
         header { class: "topbar",
@@ -59,6 +62,7 @@ pub(crate) fn TopBar() -> Element {
                 h1 { "{title}" }
             }
             div { class: "topbar-actions",
+                LanguageSelector { current_language: language }
                 button {
                     class: "ghost-button",
                     onclick: move |_| ctx.screen.set(Screen::Naming),
