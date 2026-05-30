@@ -3,6 +3,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+mod actions;
 #[path = "components/mod.rs"]
 mod components;
 #[path = "i18n.rs"]
@@ -11,6 +12,7 @@ mod storage;
 #[path = "views/mod.rs"]
 mod views;
 
+pub(crate) use actions::*;
 pub(crate) use storage::*;
 
 use components::{AppTitleBar, Sidebar, TopBar};

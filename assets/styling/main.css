@@ -567,6 +567,35 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.14);
 }
 
+.url-feedback {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+}
+
+.url-feedback .muted-line {
+    flex: 1 0 100%;
+    margin: 0;
+}
+
+.invalid-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 12px 14px 12px 32px;
+    color: var(--warning);
+    background: rgba(245, 184, 90, 0.08);
+    border: 1px solid rgba(245, 184, 90, 0.28);
+    border-radius: 8px;
+}
+
+.invalid-list li {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button,
