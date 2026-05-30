@@ -421,6 +421,10 @@ pub(crate) struct FetchContext {
 }
 
 impl FetchContext {
+    fn settings(&self) -> AppSettings {
+        (self.settings)()
+    }
+
     fn language(&self) -> String {
         self.settings.read().language.clone()
     }
