@@ -972,9 +972,11 @@ mod tests {
 
     #[test]
     fn builds_analysis_args_with_common_network_options() {
-        let mut settings = AppSettings::default();
-        settings.cookie_file = "cookies.txt".to_string();
-        settings.proxy = "socks5://localhost:9000".to_string();
+        let settings = AppSettings {
+            cookie_file: "cookies.txt".to_string(),
+            proxy: "socks5://localhost:9000".to_string(),
+            ..Default::default()
+        };
 
         assert_eq!(
             build_analysis_args("https://example.com/video", &settings),
