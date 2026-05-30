@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
 use dioxus::prelude::*;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 
 mod actions;
+mod backend;
 #[path = "components/mod.rs"]
 mod components;
 #[path = "i18n.rs"]
@@ -13,6 +15,7 @@ mod storage;
 mod views;
 
 pub(crate) use actions::*;
+pub(crate) use backend::*;
 pub(crate) use storage::*;
 
 use components::{AppTitleBar, Sidebar, TopBar};
@@ -349,8 +352,8 @@ impl DependencyItem {
         Self {
             name: name.to_string(),
             installed: false,
-            version: "Checking".to_string(),
-            detail: "Not checked yet".to_string(),
+            version: i18n::t("checking"),
+            detail: i18n::t("not_checked_yet"),
         }
     }
 }
@@ -413,6 +416,7 @@ pub(crate) struct FetchContext {
     library_grid: Signal<bool>,
     last_error: Signal<Option<AppError>>,
     next_job_id: Signal<u64>,
+    backend: Coroutine<BackendAction>,
 }
 
 impl FetchContext {
@@ -461,6 +465,30 @@ pub fn FetchApp() -> Element {
     let last_error = use_signal(|| None::<AppError>);
     let next_job_id = use_signal(|| 1u64);
 
+    let backend = use_coroutine(move |mut rx: UnboundedReceiver<BackendAction>| {
+        let mut dependencies = dependencies;
+        let mut busy = busy;
+
+        async move {
+            while let Some(action) = rx.next().await {
+                match action {
+                    BackendAction::RefreshDependencies => {
+                        busy.set(true);
+                        dependencies.set(check_dependencies().await);
+                        busy.set(false);
+                    }
+                    BackendAction::Analyze { .. }
+                    | BackendAction::StartQueue { .. }
+                    | BackendAction::RetryFailed { .. } => {}
+                }
+            }
+        }
+    });
+
+    use_future(move || async move {
+        backend.send(BackendAction::RefreshDependencies);
+    });
+
     use_context_provider(|| FetchContext {
         screen,
         download_type,
@@ -485,6 +513,7 @@ pub fn FetchApp() -> Element {
         library_grid,
         last_error,
         next_job_id,
+        backend,
     });
 
     let language = settings.read().language.clone();

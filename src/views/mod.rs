@@ -1,6 +1,7 @@
 use super::*;
 
 mod home;
+mod settings;
 
 #[component]
 pub(crate) fn ActiveView() -> Element {
@@ -18,7 +19,7 @@ pub(crate) fn ActiveView() -> Element {
         Screen::Library => rsx! { ScreenPanel { screen: Screen::Library } },
         Screen::Presets => rsx! { ScreenPanel { screen: Screen::Presets } },
         Screen::Advanced => rsx! { ScreenPanel { screen: Screen::Advanced } },
-        Screen::Settings => rsx! { ScreenPanel { screen: Screen::Settings } },
+        Screen::Settings => rsx! { settings::SettingsView {} },
         Screen::Error => rsx! { ScreenPanel { screen: Screen::Error } },
     }
 }
