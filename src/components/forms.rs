@@ -103,7 +103,7 @@ pub(crate) fn RangeSetting(
 
 #[component]
 pub(crate) fn EditablePresetField(label: String, field: String, value: String) -> Element {
-    let mut ctx = use_context::<FetchContext>();
+    let ctx = use_context::<FetchContext>();
 
     rsx! {
         label { class: "field-label",
@@ -112,11 +112,7 @@ pub(crate) fn EditablePresetField(label: String, field: String, value: String) -
                 value: "{value}",
                 oninput: move |event| {
                     let next = event.value();
-                    ctx.presets.with_mut(|presets| {
-                        if let Some(preset) = presets.get_mut((ctx.active_preset)()) {
-                            set_preset_field(preset, &field, next);
-                        }
-                    });
+                    update_selected_preset(ctx, &field, next);
                 },
             }
         }
@@ -125,7 +121,7 @@ pub(crate) fn EditablePresetField(label: String, field: String, value: String) -
 
 #[component]
 pub(crate) fn SelectPresetKind(value: DownloadType) -> Element {
-    let mut ctx = use_context::<FetchContext>();
+    let ctx = use_context::<FetchContext>();
     let current = download_type_value(value);
 
     rsx! {
@@ -139,11 +135,7 @@ pub(crate) fn SelectPresetKind(value: DownloadType) -> Element {
                         "video_only" => DownloadType::VideoOnly,
                         _ => DownloadType::FullVideo,
                     };
-                    ctx.presets.with_mut(|presets| {
-                        if let Some(preset) = presets.get_mut((ctx.active_preset)()) {
-                            preset.kind = kind;
-                        }
-                    });
+                    update_selected_preset_kind(ctx, kind);
                 },
                 option { value: "full_video", "{DownloadType::FullVideo.label()}" }
                 option { value: "audio_only", "{DownloadType::AudioOnly.label()}" }
@@ -176,20 +168,6 @@ fn set_i32_setting(settings: &mut AppSettings, field: &str, value: i32) {
         "retries" => settings.retries = value,
         "parallel_jobs" => settings.parallel_jobs = value,
         "concurrent_fragments" => settings.concurrent_fragments = value,
-        _ => {}
-    }
-}
-
-fn set_preset_field(preset: &mut Preset, field: &str, value: String) {
-    match field {
-        "name" => preset.name = value,
-        "format_label" => preset.format_label = value,
-        "format_rule" => preset.format_rule = value,
-        "audio_format" => preset.audio_format = value,
-        "audio_quality" => preset.audio_quality = value,
-        "container" => preset.container = value,
-        "output_template" => preset.output_template = value,
-        "extra_flags" => preset.extra_flags = value,
         _ => {}
     }
 }

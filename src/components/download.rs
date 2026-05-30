@@ -3,7 +3,7 @@ use super::StatBlock;
 
 #[component]
 pub(crate) fn PresetButton(index: usize, preset: Preset) -> Element {
-    let mut ctx = use_context::<FetchContext>();
+    let ctx = use_context::<FetchContext>();
     let detail = match preset.kind {
         DownloadType::AudioOnly => format!(
             "{} {}",
@@ -20,17 +20,7 @@ pub(crate) fn PresetButton(index: usize, preset: Preset) -> Element {
     rsx! {
         button {
             class: if (ctx.active_preset)() == index { "preset-row active" } else { "preset-row" },
-            onclick: move |_| {
-                ctx.active_preset.set(index);
-                ctx.download_type.set(preset.kind);
-                ctx.selected_format.set(preset.format_label.clone());
-                ctx.selected_audio_format.set(preset.audio_format.to_uppercase());
-                ctx.audio_quality.set(audio_quality_label(&preset.audio_quality));
-                ctx.container.set(preset.container.to_uppercase());
-                ctx.video_codec.set(default_video_codec(&preset.format_label).to_string());
-                ctx.resolution_cap.set(default_resolution_cap(&preset.format_label).to_string());
-                ctx.settings.with_mut(|settings| settings.file_template = preset.output_template.clone());
-            },
+            onclick: move |_| select_preset(ctx, index),
             span { class: "preset-name", "{preset.name}" }
             span { class: "preset-detail", "{detail}" }
         }

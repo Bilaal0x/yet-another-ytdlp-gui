@@ -209,6 +209,63 @@ pub(crate) fn clear_completed(mut ctx: FetchContext) {
         .with_mut(|jobs| jobs.retain(|job| job.status != JobStatus::Completed));
 }
 
+pub(crate) fn select_preset(mut ctx: FetchContext, index: usize) {
+    if (ctx.presets)().get(index).is_none() {
+        return;
+    }
+
+    ctx.active_preset.set(index);
+    apply_preset(ctx);
+    persist_preset_store(ctx);
+}
+
+pub(crate) fn duplicate_preset(mut ctx: FetchContext) {
+    let mut preset = ctx.active_preset();
+    preset.name = format!("{} copy", preset.name);
+
+    ctx.presets.with_mut(|presets| {
+        presets.push(preset);
+        ctx.active_preset.set(presets.len() - 1);
+    });
+    apply_preset(ctx);
+    persist_preset_store(ctx);
+}
+
+pub(crate) fn apply_preset(mut ctx: FetchContext) {
+    let preset = ctx.active_preset();
+    ctx.download_type.set(preset.kind);
+    ctx.selected_format.set(preset.format_label.clone());
+    ctx.selected_audio_format
+        .set(preset.audio_format.to_uppercase());
+    ctx.audio_quality
+        .set(audio_quality_label(&preset.audio_quality));
+    ctx.container.set(preset.container.to_uppercase());
+    ctx.video_codec
+        .set(default_video_codec(&preset.format_label).to_string());
+    ctx.resolution_cap
+        .set(default_resolution_cap(&preset.format_label).to_string());
+    ctx.settings
+        .with_mut(|settings| settings.file_template = preset.output_template);
+}
+
+pub(crate) fn update_selected_preset(mut ctx: FetchContext, field: &str, value: String) {
+    ctx.presets.with_mut(|presets| {
+        if let Some(preset) = presets.get_mut((ctx.active_preset)()) {
+            set_preset_field(preset, field, value);
+        }
+    });
+    persist_preset_store(ctx);
+}
+
+pub(crate) fn update_selected_preset_kind(mut ctx: FetchContext, kind: DownloadType) {
+    ctx.presets.with_mut(|presets| {
+        if let Some(preset) = presets.get_mut((ctx.active_preset)()) {
+            preset.kind = kind;
+        }
+    });
+    persist_preset_store(ctx);
+}
+
 pub(crate) fn requeue_job(mut ctx: FetchContext, mut job: DownloadJob) {
     let id = (ctx.next_job_id)();
     ctx.next_job_id.set(id + 1);
@@ -314,6 +371,20 @@ pub(crate) fn build_download_args(job: &DownloadJob, settings: &AppSettings) -> 
     }
 
     args
+}
+
+fn set_preset_field(preset: &mut Preset, field: &str, value: String) {
+    match field {
+        "name" => preset.name = value,
+        "format_label" => preset.format_label = value,
+        "format_rule" => preset.format_rule = value,
+        "audio_format" => preset.audio_format = value,
+        "audio_quality" => preset.audio_quality = value,
+        "container" => preset.container = value,
+        "output_template" => preset.output_template = value,
+        "extra_flags" => preset.extra_flags = value,
+        _ => {}
+    }
 }
 
 fn queue_command_args(

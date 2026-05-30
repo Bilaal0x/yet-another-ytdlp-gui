@@ -6,6 +6,7 @@ mod home;
 mod library;
 mod naming;
 mod playlist;
+mod presets;
 mod queue;
 mod ready;
 mod settings;
@@ -24,7 +25,7 @@ pub(crate) fn ActiveView() -> Element {
         Screen::Naming => rsx! { naming::NamingView {} },
         Screen::Queue => rsx! { queue::QueueView {} },
         Screen::Library => rsx! { library::LibraryView {} },
-        Screen::Presets => rsx! { ScreenPanel { screen: Screen::Presets } },
+        Screen::Presets => rsx! { presets::PresetsView {} },
         Screen::Advanced => rsx! { ScreenPanel { screen: Screen::Advanced } },
         Screen::Settings => rsx! { settings::SettingsView {} },
         Screen::Error => rsx! { ScreenPanel { screen: Screen::Error } },
