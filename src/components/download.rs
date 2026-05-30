@@ -71,9 +71,6 @@ pub(crate) fn ModeButton(mode: DownloadType, label: String, detail: String) -> E
             class: if (ctx.download_type)() == mode { "mode-button active" } else { "mode-button" },
             onclick: move |_| {
                 ctx.download_type.set(mode);
-                if mode == DownloadType::AudioOnly {
-                    ctx.screen.set(Screen::Audio);
-                }
             },
             span { class: "mode-title", "{label}" }
             span { class: "mode-copy", "{detail}" }

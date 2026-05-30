@@ -94,6 +94,214 @@ pub(crate) fn cancel_analysis(mut ctx: FetchContext) {
     ctx.busy.set(false);
 }
 
+pub(crate) fn add_analysis_to_queue(mut ctx: FetchContext) {
+    let Some(analysis) = (ctx.analysis)() else {
+        ctx.last_error.set(Some(AppError::new(
+            i18n::t("nothing_to_queue"),
+            i18n::t("analyze_before_queue"),
+            "",
+        )));
+        ctx.screen.set(Screen::Error);
+        return;
+    };
+
+    let selected: Vec<MediaItem> = analysis
+        .items
+        .into_iter()
+        .filter(|item| item.selected)
+        .collect();
+
+    if selected.is_empty() {
+        ctx.last_error.set(Some(AppError::new(
+            i18n::t("nothing_selected"),
+            i18n::t("select_before_queue"),
+            "",
+        )));
+        ctx.screen.set(Screen::Error);
+        return;
+    }
+
+    let settings = ctx.settings();
+    let preset = ctx.active_preset();
+    let download_type = (ctx.download_type)();
+    let format_label = (ctx.selected_format)();
+    let audio_format = (ctx.selected_audio_format)();
+    let container = (ctx.container)();
+
+    ctx.jobs.with_mut(|jobs| {
+        for item in selected {
+            let id = (ctx.next_job_id)();
+            ctx.next_job_id.set(id + 1);
+            jobs.push(build_job(
+                id,
+                item,
+                download_type,
+                &format_label,
+                &audio_format,
+                &container,
+                &settings,
+                &preset,
+            ));
+        }
+    });
+    ctx.screen.set(Screen::Queue);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_job(
+    id: u64,
+    item: MediaItem,
+    download_type: DownloadType,
+    format_label: &str,
+    audio_format: &str,
+    container: &str,
+    settings: &AppSettings,
+    preset: &Preset,
+) -> DownloadJob {
+    let command_display = queue_command_display(
+        &item.url,
+        download_type,
+        format_label,
+        audio_format,
+        container,
+        settings,
+        preset,
+    );
+
+    DownloadJob {
+        id,
+        title: item.title,
+        source_url: item.url,
+        thumbnail: item.thumbnail,
+        download_type,
+        format_label: format_label.to_string(),
+        audio_format: audio_format.to_lowercase(),
+        container: container.to_lowercase(),
+        output_folder: settings.output_folder.clone(),
+        output_template: settings.file_template.clone(),
+        command_display,
+        status: JobStatus::Queued,
+        progress: 0.0,
+        speed: "-".to_string(),
+        eta: "-".to_string(),
+        step: i18n::t("job_step_queued"),
+        output_hint: settings.output_folder.clone(),
+        log: Vec::new(),
+        error: None,
+    }
+}
+
+pub(crate) fn set_all_analysis_items(mut ctx: FetchContext, selected: bool) {
+    ctx.analysis.with_mut(|analysis| {
+        if let Some(analysis) = analysis {
+            for item in &mut analysis.items {
+                item.selected = selected;
+            }
+        }
+    });
+}
+
+pub(crate) fn select_first_n(mut ctx: FetchContext, count: usize) {
+    ctx.analysis.with_mut(|analysis| {
+        if let Some(analysis) = analysis {
+            for (index, item) in analysis.items.iter_mut().enumerate() {
+                item.selected = index < count;
+            }
+        }
+    });
+}
+
+pub(crate) fn queue_command_preview(ctx: FetchContext) -> String {
+    let settings = ctx.settings();
+    let preset = ctx.active_preset();
+    let url = (ctx.analysis)()
+        .and_then(|analysis| {
+            analysis
+                .items
+                .iter()
+                .find(|item| item.selected)
+                .or_else(|| analysis.items.first())
+                .map(|item| item.url.clone())
+        })
+        .or_else(|| parse_urls(&(ctx.url_text)()).first().cloned())
+        .unwrap_or_else(|| "https://example.com/video".to_string());
+
+    queue_command_display(
+        &url,
+        (ctx.download_type)(),
+        &(ctx.selected_format)(),
+        &(ctx.selected_audio_format)(),
+        &(ctx.container)(),
+        &settings,
+        &preset,
+    )
+}
+
+pub(crate) fn queue_command_display(
+    source_url: &str,
+    download_type: DownloadType,
+    format_label: &str,
+    audio_format: &str,
+    container: &str,
+    settings: &AppSettings,
+    preset: &Preset,
+) -> String {
+    yt_dlp_command_display(&queue_command_args(
+        source_url,
+        download_type,
+        format_label,
+        audio_format,
+        container,
+        settings,
+        preset,
+    ))
+}
+
+fn queue_command_args(
+    source_url: &str,
+    download_type: DownloadType,
+    _format_label: &str,
+    audio_format: &str,
+    container: &str,
+    settings: &AppSettings,
+    preset: &Preset,
+) -> Vec<String> {
+    let mut args = vec![
+        "--newline".to_string(),
+        "--no-update".to_string(),
+        "--encoding".to_string(),
+        "utf-8".to_string(),
+    ];
+
+    match download_type {
+        DownloadType::AudioOnly => {
+            args.push("-f".to_string());
+            args.push("bestaudio/best".to_string());
+            args.push("--extract-audio".to_string());
+            args.push("--audio-format".to_string());
+            args.push(audio_format.to_lowercase());
+        }
+        DownloadType::VideoOnly => {
+            args.push("-f".to_string());
+            args.push("bestvideo".to_string());
+        }
+        DownloadType::FullVideo => {
+            args.push("-f".to_string());
+            args.push(preset.format_rule.clone());
+            args.push("--merge-output-format".to_string());
+            args.push(container.to_lowercase());
+        }
+    }
+
+    args.push("-P".to_string());
+    args.push(settings.output_folder.clone());
+    args.push("-o".to_string());
+    args.push(settings.file_template.clone());
+    args.push(source_url.to_string());
+
+    args
+}
+
 #[cfg(feature = "desktop")]
 pub(crate) fn import_url_list(mut ctx: FetchContext) {
     if let Some(path) = rfd::FileDialog::new()
@@ -247,5 +455,50 @@ mod tests {
                 "notes only".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn queue_command_args_include_mode_and_output() {
+        let settings = AppSettings::default();
+        let preset = Preset::defaults().remove(0);
+
+        let args = queue_command_args(
+            "https://example.com/video",
+            DownloadType::FullVideo,
+            "MP4 1080p",
+            "MP3",
+            "MP4",
+            &settings,
+            &preset,
+        );
+
+        assert!(args.contains(&"-f".to_string()));
+        assert!(args.contains(&preset.format_rule));
+        assert!(args.contains(&"--merge-output-format".to_string()));
+        assert!(args.contains(&"mp4".to_string()));
+        assert!(args.contains(&"-P".to_string()));
+        assert!(args.contains(&settings.output_folder));
+        assert_eq!(args.last(), Some(&"https://example.com/video".to_string()));
+    }
+
+    #[test]
+    fn queue_command_args_support_audio_mode() {
+        let settings = AppSettings::default();
+        let preset = Preset::defaults().remove(1);
+
+        let args = queue_command_args(
+            "https://example.com/audio",
+            DownloadType::AudioOnly,
+            "Best audio",
+            "M4A",
+            "MP4",
+            &settings,
+            &preset,
+        );
+
+        assert!(args.contains(&"--extract-audio".to_string()));
+        assert!(args.contains(&"--audio-format".to_string()));
+        assert!(args.contains(&"m4a".to_string()));
+        assert_eq!(args.last(), Some(&"https://example.com/audio".to_string()));
     }
 }
