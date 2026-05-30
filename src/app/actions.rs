@@ -164,7 +164,7 @@ pub(crate) fn build_job(
     resolution_cap: &str,
     settings: &AppSettings,
 ) -> DownloadJob {
-    let command_display = queue_command_display(
+    let command_args = queue_command_args(
         &item.url,
         download_type,
         format_label,
@@ -175,6 +175,7 @@ pub(crate) fn build_job(
         resolution_cap,
         settings,
     );
+    let command_display = yt_dlp_command_display(&command_args);
 
     DownloadJob {
         id,
@@ -190,16 +191,22 @@ pub(crate) fn build_job(
         resolution_cap: resolution_cap.to_string(),
         output_folder: settings.output_folder.clone(),
         output_template: settings.file_template.clone(),
+        command_args,
         command_display,
         status: JobStatus::Queued,
         progress: 0.0,
         speed: "-".to_string(),
         eta: "-".to_string(),
         step: i18n::t("job_step_queued"),
-        output_hint: settings.output_folder.clone(),
+        output_hint: preview_output_path(settings),
         log: Vec::new(),
         error: None,
     }
+}
+
+pub(crate) fn clear_completed(mut ctx: FetchContext) {
+    ctx.jobs
+        .with_mut(|jobs| jobs.retain(|job| job.status != JobStatus::Completed));
 }
 
 pub(crate) fn set_all_analysis_items(mut ctx: FetchContext, selected: bool) {
@@ -273,6 +280,27 @@ pub(crate) fn queue_command_display(
     ))
 }
 
+pub(crate) fn build_download_args(job: &DownloadJob, settings: &AppSettings) -> Vec<String> {
+    let mut args = job.command_args.clone();
+    let source_url = args.pop();
+
+    args.push("--retries".to_string());
+    args.push(settings.retries.max(0).to_string());
+    args.push("--concurrent-fragments".to_string());
+    args.push(settings.concurrent_fragments.max(1).to_string());
+
+    if settings.speed_limit != "Unlimited" {
+        args.push("--limit-rate".to_string());
+        args.push(settings.speed_limit.clone());
+    }
+
+    if let Some(source_url) = source_url {
+        args.push(source_url);
+    }
+
+    args
+}
+
 fn queue_command_args(
     source_url: &str,
     download_type: DownloadType,
@@ -330,8 +358,19 @@ fn queue_command_args(
     if settings.embed_thumbnail {
         args.push("--embed-thumbnail".to_string());
     }
+    if settings.write_thumbnail {
+        args.push("--write-thumbnail".to_string());
+    }
     if settings.add_metadata {
         args.push("--add-metadata".to_string());
+    }
+    if settings.write_subtitles {
+        args.push("--write-subs".to_string());
+        args.push("--sub-langs".to_string());
+        args.push(settings.subtitle_languages.clone());
+    }
+    if settings.write_auto_subtitles {
+        args.push("--write-auto-subs".to_string());
     }
     if settings.split_chapters {
         args.push("--split-chapters".to_string());
@@ -339,8 +378,11 @@ fn queue_command_args(
     if settings.replace_unsafe_characters {
         args.push("--windows-filenames".to_string());
     }
-    if settings.prevent_overwrites || settings.skip_existing {
+    if settings.prevent_overwrites {
         args.push("--no-overwrites".to_string());
+    }
+    if settings.skip_existing {
+        args.push("--continue".to_string());
     }
 
     args.push("-P".to_string());
@@ -574,5 +616,45 @@ mod tests {
         assert!(args.contains(&"--audio-quality".to_string()));
         assert!(args.contains(&"320K".to_string()));
         assert_eq!(args.last(), Some(&"https://example.com/audio".to_string()));
+    }
+
+    #[test]
+    fn build_download_args_adds_runtime_controls_before_url() {
+        let mut settings = AppSettings::default();
+        settings.retries = 7;
+        settings.concurrent_fragments = 3;
+        settings.speed_limit = "5M".to_string();
+        let item = MediaItem {
+            title: "Video".to_string(),
+            uploader: "Uploader".to_string(),
+            url: "https://example.com/video".to_string(),
+            duration: "1:00".to_string(),
+            thumbnail: String::new(),
+            format_count: 1,
+            estimated_size: "1 MB".to_string(),
+            selected: true,
+        };
+        let job = build_job(
+            1,
+            item,
+            DownloadType::FullVideo,
+            "MP4 1080p",
+            "MP3",
+            "320 kbps",
+            "MP4",
+            "H.264",
+            "1080p",
+            &settings,
+        );
+
+        let args = build_download_args(&job, &settings);
+
+        assert!(args.contains(&"--retries".to_string()));
+        assert!(args.contains(&"7".to_string()));
+        assert!(args.contains(&"--concurrent-fragments".to_string()));
+        assert!(args.contains(&"3".to_string()));
+        assert!(args.contains(&"--limit-rate".to_string()));
+        assert!(args.contains(&"5M".to_string()));
+        assert_eq!(args.last(), Some(&"https://example.com/video".to_string()));
     }
 }

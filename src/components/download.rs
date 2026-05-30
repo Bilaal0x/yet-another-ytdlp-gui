@@ -173,7 +173,7 @@ pub(crate) fn DownloadRow(job: DownloadJob) -> Element {
                     span { "{job.step}" }
                     span { "{job.speed}" }
                     span { "{i18n::t(\"eta\")} {job.eta}" }
-                    span { "{job.output_folder}" }
+                    span { "{job.output_hint}" }
                 }
                 if log_open {
                     pre { class: "job-log", "{job.log.join(\"\\n\")}" }
