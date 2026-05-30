@@ -3,6 +3,50 @@ use std::path::PathBuf;
 
 use super::*;
 
+pub(crate) fn load_preset_store() -> PresetStore {
+    let path = preset_store_path();
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return PresetStore::defaults();
+    };
+
+    serde_json::from_str::<PresetStore>(&contents)
+        .map(PresetStore::normalized)
+        .unwrap_or_else(|_| PresetStore::defaults())
+}
+
+pub(crate) fn persist_preset_store(ctx: FetchContext) {
+    let presets = (ctx.presets)();
+    let active_index = if presets.is_empty() {
+        0
+    } else {
+        (ctx.active_preset)().min(presets.len() - 1)
+    };
+    let store = PresetStore {
+        version: 1,
+        active_index,
+        presets,
+    }
+    .normalized();
+
+    let _ = save_preset_store(&store);
+}
+
+pub(crate) fn save_preset_store(store: &PresetStore) -> Result<(), String> {
+    let path = preset_store_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create storage folder: {error}"))?;
+    }
+
+    let contents = serde_json::to_string_pretty(store)
+        .map_err(|error| format!("failed to serialize presets: {error}"))?;
+    std::fs::write(path, contents).map_err(|error| format!("failed to write presets: {error}"))
+}
+
+pub(crate) fn preset_store_path() -> PathBuf {
+    app_data_dir().join("presets.json")
+}
+
 pub(crate) fn set_language(mut ctx: FetchContext, language: String) {
     if !language_is_available(&language) {
         return;
@@ -53,4 +97,34 @@ fn app_data_dir() -> PathBuf {
     }
 
     PathBuf::from(".").join("yaydlp")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_empty_preset_store_to_defaults() {
+        let store = PresetStore {
+            version: 1,
+            active_index: 42,
+            presets: Vec::new(),
+        }
+        .normalized();
+
+        assert_eq!(store.active_index, 0);
+        assert!(!store.presets.is_empty());
+    }
+
+    #[test]
+    fn normalizes_out_of_range_active_preset() {
+        let store = PresetStore {
+            version: 1,
+            active_index: 99,
+            presets: Preset::defaults(),
+        }
+        .normalized();
+
+        assert_eq!(store.active_index, 0);
+    }
 }

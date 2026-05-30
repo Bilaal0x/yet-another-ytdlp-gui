@@ -128,6 +128,32 @@ pub(crate) fn localized_format_cap(cap: &str) -> String {
     }
 }
 
+pub(crate) fn localized_preset_name(name: &str) -> String {
+    if let Some(base) = name.strip_suffix(" copy") {
+        return format!(
+            "{} {}",
+            localized_preset_name(base),
+            i18n::t("preset_copy_suffix")
+        );
+    }
+    if let Some(base) = name.strip_suffix(&format!(" {}", i18n::t("preset_copy_suffix"))) {
+        return format!(
+            "{} {}",
+            localized_preset_name(base),
+            i18n::t("preset_copy_suffix")
+        );
+    }
+
+    match name {
+        "YouTube MP4 1080p" => i18n::t("preset_youtube_mp4_1080p"),
+        "Audio MP3 320" => i18n::t("preset_audio_mp3_320"),
+        "Archive playlist" => i18n::t("preset_archive_playlist"),
+        "4K HDR" => i18n::t("preset_4k_hdr"),
+        "Small file 720p" => i18n::t("preset_small_file_720p"),
+        _ => name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

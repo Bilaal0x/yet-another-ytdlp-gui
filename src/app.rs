@@ -451,6 +451,7 @@ pub fn FetchApp() -> Element {
         i18n::init(&settings.language);
         settings
     });
+    let initial_preset_store = use_hook(load_preset_store);
 
     let screen = use_signal(|| Screen::Home);
     let download_type = use_signal(|| DownloadType::FullVideo);
@@ -461,9 +462,12 @@ pub fn FetchApp() -> Element {
     let container = use_signal(|| "MP4".to_string());
     let video_codec = use_signal(|| "H.264".to_string());
     let resolution_cap = use_signal(|| "1080p".to_string());
-    let active_preset = use_signal(|| 0usize);
+    let active_preset = use_signal({
+        let initial_preset_store = initial_preset_store.clone();
+        move || initial_preset_store.active_index
+    });
     let settings = use_signal(move || initial_settings.clone());
-    let presets = use_signal(Preset::defaults);
+    let presets = use_signal(move || initial_preset_store.presets.clone());
     let analysis = use_signal(|| None::<AnalysisResult>);
     let jobs = use_signal(Vec::<DownloadJob>::new);
     let dependencies = use_signal(DependencyReport::default);
