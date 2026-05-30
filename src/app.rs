@@ -382,6 +382,7 @@ pub(crate) enum BackendAction {
     Analyze {
         urls: Vec<String>,
         settings: AppSettings,
+        cancel_generation: u64,
     },
     StartQueue {
         settings: AppSettings,
@@ -466,8 +467,12 @@ pub fn FetchApp() -> Element {
     let next_job_id = use_signal(|| 1u64);
 
     let backend = use_coroutine(move |mut rx: UnboundedReceiver<BackendAction>| {
+        let mut screen = screen;
+        let mut analysis = analysis;
         let mut dependencies = dependencies;
         let mut busy = busy;
+        let mut analysis_running = analysis_running;
+        let mut last_error = last_error;
 
         async move {
             while let Some(action) = rx.next().await {
@@ -477,9 +482,44 @@ pub fn FetchApp() -> Element {
                         dependencies.set(check_dependencies().await);
                         busy.set(false);
                     }
-                    BackendAction::Analyze { .. }
-                    | BackendAction::StartQueue { .. }
-                    | BackendAction::RetryFailed { .. } => {}
+                    BackendAction::Analyze {
+                        urls,
+                        settings,
+                        cancel_generation,
+                    } => {
+                        busy.set(true);
+                        analysis_running.set(true);
+                        last_error.set(None);
+                        analysis.set(None);
+
+                        match analyze_urls(
+                            urls,
+                            &settings,
+                            analysis_cancel_token,
+                            cancel_generation,
+                        )
+                        .await
+                        {
+                            Ok(Some(result)) => {
+                                let next_screen = if result.items.len() > 1 {
+                                    Screen::Playlist
+                                } else {
+                                    Screen::Ready
+                                };
+                                analysis.set(Some(result));
+                                screen.set(next_screen);
+                            }
+                            Ok(None) => {}
+                            Err(error) => {
+                                last_error.set(Some(error));
+                                screen.set(Screen::Error);
+                            }
+                        }
+
+                        analysis_running.set(false);
+                        busy.set(false);
+                    }
+                    BackendAction::StartQueue { .. } | BackendAction::RetryFailed { .. } => {}
                 }
             }
         }
