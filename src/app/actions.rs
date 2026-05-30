@@ -209,6 +209,21 @@ pub(crate) fn clear_completed(mut ctx: FetchContext) {
         .with_mut(|jobs| jobs.retain(|job| job.status != JobStatus::Completed));
 }
 
+pub(crate) fn requeue_job(mut ctx: FetchContext, mut job: DownloadJob) {
+    let id = (ctx.next_job_id)();
+    ctx.next_job_id.set(id + 1);
+    job.id = id;
+    job.status = JobStatus::Queued;
+    job.progress = 0.0;
+    job.speed = "-".to_string();
+    job.eta = "-".to_string();
+    job.step = i18n::t("job_step_queued");
+    job.error = None;
+    job.log.clear();
+    ctx.jobs.with_mut(|jobs| jobs.push(job));
+    ctx.screen.set(Screen::Queue);
+}
+
 pub(crate) fn set_all_analysis_items(mut ctx: FetchContext, selected: bool) {
     ctx.analysis.with_mut(|analysis| {
         if let Some(analysis) = analysis {
@@ -433,6 +448,32 @@ pub(crate) fn pick_output_folder(mut ctx: FetchContext) {
 
 #[cfg(not(feature = "desktop"))]
 pub(crate) fn pick_output_folder(_ctx: FetchContext) {}
+
+pub(crate) fn reveal_output(path: &str) {
+    let path = std::path::Path::new(path);
+
+    #[cfg(target_os = "windows")]
+    {
+        let target = if path.exists() {
+            path.to_path_buf()
+        } else {
+            path.parent().unwrap_or(path).to_path_buf()
+        };
+        let _ = std::process::Command::new("explorer").arg(target).spawn();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let target = path.parent().unwrap_or(path);
+        let _ = std::process::Command::new("open").arg(target).spawn();
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let target = path.parent().unwrap_or(path);
+        let _ = std::process::Command::new("xdg-open").arg(target).spawn();
+    }
+}
 
 pub(crate) fn open_ready_view(mut ctx: FetchContext) {
     if (ctx.analysis)().is_some() {

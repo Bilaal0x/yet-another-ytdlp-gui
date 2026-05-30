@@ -3,6 +3,7 @@ use super::*;
 mod audio;
 mod format;
 mod home;
+mod library;
 mod naming;
 mod playlist;
 mod queue;
@@ -22,7 +23,7 @@ pub(crate) fn ActiveView() -> Element {
         Screen::Playlist => rsx! { playlist::PlaylistView {} },
         Screen::Naming => rsx! { naming::NamingView {} },
         Screen::Queue => rsx! { queue::QueueView {} },
-        Screen::Library => rsx! { ScreenPanel { screen: Screen::Library } },
+        Screen::Library => rsx! { library::LibraryView {} },
         Screen::Presets => rsx! { ScreenPanel { screen: Screen::Presets } },
         Screen::Advanced => rsx! { ScreenPanel { screen: Screen::Advanced } },
         Screen::Settings => rsx! { settings::SettingsView {} },
