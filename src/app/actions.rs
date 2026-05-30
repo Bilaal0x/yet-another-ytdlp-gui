@@ -76,10 +76,16 @@ pub(crate) fn start_analysis(mut ctx: FetchContext) {
     }
 
     ctx.analysis_cancel_token.with_mut(|token| *token += 1);
+    let cancel_generation = (ctx.analysis_cancel_token)();
     ctx.analysis.set(None);
     ctx.last_error.set(None);
     ctx.busy.set(true);
     ctx.analysis_running.set(true);
+    ctx.backend.send(BackendAction::Analyze {
+        urls: intake.urls,
+        settings: (ctx.settings)(),
+        cancel_generation,
+    });
 }
 
 pub(crate) fn cancel_analysis(mut ctx: FetchContext) {
