@@ -3,6 +3,7 @@ use super::*;
 #[component]
 pub(crate) fn ActiveView() -> Element {
     let ctx = use_context::<FetchContext>();
+    let _language = ctx.language();
 
     match (ctx.screen)() {
         Screen::Home => rsx! { ScreenPanel { screen: Screen::Home } },
@@ -22,20 +23,23 @@ pub(crate) fn ActiveView() -> Element {
 
 #[component]
 fn ScreenPanel(screen: Screen) -> Element {
+    let title = screen.label();
+    let caption = screen.caption();
+
     rsx! {
         section { class: "screen-grid",
             div { class: "main-column",
                 div { class: "panel-heading",
-                    div { class: "eyebrow", "Workspace" }
-                    h2 { "{screen.label()}" }
-                    p { "{screen.caption()}" }
+                    div { class: "eyebrow", "{i18n::t(\"workspace\")}" }
+                    h2 { "{title}" }
+                    p { "{caption}" }
                 }
             }
             aside { class: "side-panel quiet-panel",
                 div { class: "panel-heading compact",
-                    div { class: "eyebrow", "Current screen" }
-                    h3 { "{screen.label()}" }
-                    p { "{screen.caption()}" }
+                    div { class: "eyebrow", "{i18n::t(\"current_screen\")}" }
+                    h3 { "{title}" }
+                    p { "{caption}" }
                 }
             }
         }

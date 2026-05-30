@@ -5,8 +5,13 @@ use serde::{Deserialize, Serialize};
 
 #[path = "components/mod.rs"]
 mod components;
+#[path = "i18n.rs"]
+mod i18n;
+mod storage;
 #[path = "views/mod.rs"]
 mod views;
+
+pub(crate) use storage::*;
 
 use components::{AppTitleBar, Sidebar, TopBar};
 use views::ActiveView;
@@ -28,38 +33,38 @@ pub(crate) enum Screen {
 }
 
 impl Screen {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Screen::Home => "New Download",
-            Screen::Ready => "Ready",
-            Screen::Format => "Format",
-            Screen::Audio => "Audio",
-            Screen::Playlist => "Batch Review",
-            Screen::Naming => "Save Location",
-            Screen::Queue => "Queue",
-            Screen::Library => "Library",
-            Screen::Presets => "Presets",
-            Screen::Advanced => "Advanced",
-            Screen::Settings => "Settings",
-            Screen::Error => "Diagnostics",
-        }
+    pub(crate) fn label(self) -> String {
+        i18n::t(match self {
+            Screen::Home => "screen_home",
+            Screen::Ready => "screen_ready",
+            Screen::Format => "screen_format",
+            Screen::Audio => "screen_audio",
+            Screen::Playlist => "screen_playlist",
+            Screen::Naming => "screen_naming",
+            Screen::Queue => "screen_queue",
+            Screen::Library => "screen_library",
+            Screen::Presets => "screen_presets",
+            Screen::Advanced => "screen_advanced",
+            Screen::Settings => "screen_settings",
+            Screen::Error => "screen_error",
+        })
     }
 
-    pub(crate) fn caption(self) -> &'static str {
-        match self {
-            Screen::Home => "Paste links and start analysis",
-            Screen::Ready => "Review analyzed media",
-            Screen::Format => "Choose video format",
-            Screen::Audio => "Configure audio extraction",
-            Screen::Playlist => "Select playlist entries",
-            Screen::Naming => "Choose output folders",
-            Screen::Queue => "Track active jobs",
-            Screen::Library => "Review completed downloads",
-            Screen::Presets => "Manage reusable profiles",
-            Screen::Advanced => "Inspect command options",
-            Screen::Settings => "Configure the desktop app",
-            Screen::Error => "Review troubleshooting details",
-        }
+    pub(crate) fn caption(self) -> String {
+        i18n::t(match self {
+            Screen::Home => "screen_caption_home",
+            Screen::Ready => "screen_caption_ready",
+            Screen::Format => "screen_caption_format",
+            Screen::Audio => "screen_caption_audio",
+            Screen::Playlist => "screen_caption_playlist",
+            Screen::Naming => "screen_caption_naming",
+            Screen::Queue => "screen_caption_queue",
+            Screen::Library => "screen_caption_library",
+            Screen::Presets => "screen_caption_presets",
+            Screen::Advanced => "screen_caption_advanced",
+            Screen::Settings => "screen_caption_settings",
+            Screen::Error => "screen_caption_error",
+        })
     }
 }
 
@@ -107,7 +112,7 @@ pub(crate) struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            language: "en".to_string(),
+            language: default_language(),
             output_folder: "downloads".to_string(),
             file_template: "%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s".to_string(),
             subtitle_languages: "en,de,und".to_string(),
@@ -379,6 +384,10 @@ pub(crate) struct FetchContext {
 }
 
 impl FetchContext {
+    fn language(&self) -> String {
+        self.settings.read().language.clone()
+    }
+
     fn active_preset(&self) -> Preset {
         let presets = (self.presets)();
         presets
@@ -390,6 +399,12 @@ impl FetchContext {
 
 #[component]
 pub fn FetchApp() -> Element {
+    let initial_settings = use_hook(|| {
+        let settings = AppSettings::default();
+        i18n::init(&settings.language);
+        settings
+    });
+
     let screen = use_signal(|| Screen::Home);
     let download_type = use_signal(|| DownloadType::FullVideo);
     let url_text = use_signal(String::new);
@@ -400,7 +415,7 @@ pub fn FetchApp() -> Element {
     let video_codec = use_signal(|| "H.264".to_string());
     let resolution_cap = use_signal(|| "1080p".to_string());
     let active_preset = use_signal(|| 0usize);
-    let settings = use_signal(AppSettings::default);
+    let settings = use_signal(move || initial_settings.clone());
     let presets = use_signal(Preset::defaults);
     let analysis = use_signal(|| None::<AnalysisResult>);
     let jobs = use_signal(Vec::<DownloadJob>::new);
@@ -440,8 +455,11 @@ pub fn FetchApp() -> Element {
         next_job_id,
     });
 
+    let language = settings.read().language.clone();
+    let dir = if i18n::is_rtl() { "rtl" } else { "ltr" };
+
     rsx! {
-        div { class: "window-root", dir: "ltr", "data-language": "en",
+        div { class: "window-root", dir, "data-language": "{language}",
             AppTitleBar {}
             div { class: "app-shell",
                 Sidebar {}
