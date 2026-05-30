@@ -34,7 +34,7 @@ pub(crate) fn Sidebar() -> Element {
 
             div { class: "sidebar-panel",
                 div { class: "eyebrow", "Active preset" }
-                div { class: "profile-name", "YouTube MP4 1080p" }
+                div { class: "profile-name", "{ctx.active_preset().name}" }
                 p { "Every queue item will keep its own command, output path, status, and diagnostic log." }
                 button {
                     class: "text-button",
