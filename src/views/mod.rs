@@ -1,6 +1,9 @@
 use super::*;
 
+mod audio;
+mod format;
 mod home;
+mod naming;
 mod playlist;
 mod ready;
 mod settings;
@@ -13,10 +16,10 @@ pub(crate) fn ActiveView() -> Element {
     match (ctx.screen)() {
         Screen::Home => rsx! { home::HomeView {} },
         Screen::Ready => rsx! { ready::ReadyView {} },
-        Screen::Format => rsx! { ScreenPanel { screen: Screen::Format } },
-        Screen::Audio => rsx! { ScreenPanel { screen: Screen::Audio } },
+        Screen::Format => rsx! { format::FormatView {} },
+        Screen::Audio => rsx! { audio::AudioView {} },
         Screen::Playlist => rsx! { playlist::PlaylistView {} },
-        Screen::Naming => rsx! { ScreenPanel { screen: Screen::Naming } },
+        Screen::Naming => rsx! { naming::NamingView {} },
         Screen::Queue => rsx! { ScreenPanel { screen: Screen::Queue } },
         Screen::Library => rsx! { ScreenPanel { screen: Screen::Library } },
         Screen::Presets => rsx! { ScreenPanel { screen: Screen::Presets } },

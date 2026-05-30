@@ -122,11 +122,13 @@ pub(crate) fn add_analysis_to_queue(mut ctx: FetchContext) {
     }
 
     let settings = ctx.settings();
-    let preset = ctx.active_preset();
     let download_type = (ctx.download_type)();
     let format_label = (ctx.selected_format)();
     let audio_format = (ctx.selected_audio_format)();
+    let audio_quality = (ctx.audio_quality)();
     let container = (ctx.container)();
+    let video_codec = (ctx.video_codec)();
+    let resolution_cap = (ctx.resolution_cap)();
 
     ctx.jobs.with_mut(|jobs| {
         for item in selected {
@@ -138,9 +140,11 @@ pub(crate) fn add_analysis_to_queue(mut ctx: FetchContext) {
                 download_type,
                 &format_label,
                 &audio_format,
+                &audio_quality,
                 &container,
+                &video_codec,
+                &resolution_cap,
                 &settings,
-                &preset,
             ));
         }
     });
@@ -154,18 +158,22 @@ pub(crate) fn build_job(
     download_type: DownloadType,
     format_label: &str,
     audio_format: &str,
+    audio_quality: &str,
     container: &str,
+    video_codec: &str,
+    resolution_cap: &str,
     settings: &AppSettings,
-    preset: &Preset,
 ) -> DownloadJob {
     let command_display = queue_command_display(
         &item.url,
         download_type,
         format_label,
         audio_format,
+        audio_quality,
         container,
+        video_codec,
+        resolution_cap,
         settings,
-        preset,
     );
 
     DownloadJob {
@@ -176,7 +184,10 @@ pub(crate) fn build_job(
         download_type,
         format_label: format_label.to_string(),
         audio_format: audio_format.to_lowercase(),
+        audio_quality: audio_quality_arg(audio_quality).to_string(),
         container: container.to_lowercase(),
+        video_codec: video_codec.to_string(),
+        resolution_cap: resolution_cap.to_string(),
         output_folder: settings.output_folder.clone(),
         output_template: settings.file_template.clone(),
         command_display,
@@ -213,7 +224,6 @@ pub(crate) fn select_first_n(mut ctx: FetchContext, count: usize) {
 
 pub(crate) fn queue_command_preview(ctx: FetchContext) -> String {
     let settings = ctx.settings();
-    let preset = ctx.active_preset();
     let url = (ctx.analysis)()
         .and_then(|analysis| {
             analysis
@@ -231,9 +241,11 @@ pub(crate) fn queue_command_preview(ctx: FetchContext) -> String {
         (ctx.download_type)(),
         &(ctx.selected_format)(),
         &(ctx.selected_audio_format)(),
+        &(ctx.audio_quality)(),
         &(ctx.container)(),
+        &(ctx.video_codec)(),
+        &(ctx.resolution_cap)(),
         &settings,
-        &preset,
     )
 }
 
@@ -242,29 +254,35 @@ pub(crate) fn queue_command_display(
     download_type: DownloadType,
     format_label: &str,
     audio_format: &str,
+    audio_quality: &str,
     container: &str,
+    video_codec: &str,
+    resolution_cap: &str,
     settings: &AppSettings,
-    preset: &Preset,
 ) -> String {
     yt_dlp_command_display(&queue_command_args(
         source_url,
         download_type,
         format_label,
         audio_format,
+        audio_quality,
         container,
+        video_codec,
+        resolution_cap,
         settings,
-        preset,
     ))
 }
 
 fn queue_command_args(
     source_url: &str,
     download_type: DownloadType,
-    _format_label: &str,
+    format_label: &str,
     audio_format: &str,
+    audio_quality: &str,
     container: &str,
+    video_codec: &str,
+    resolution_cap: &str,
     settings: &AppSettings,
-    preset: &Preset,
 ) -> Vec<String> {
     let mut args = vec![
         "--newline".to_string(),
@@ -272,6 +290,7 @@ fn queue_command_args(
         "--encoding".to_string(),
         "utf-8".to_string(),
     ];
+    add_common_network_args(&mut args, settings);
 
     match download_type {
         DownloadType::AudioOnly => {
@@ -280,17 +299,48 @@ fn queue_command_args(
             args.push("--extract-audio".to_string());
             args.push("--audio-format".to_string());
             args.push(audio_format.to_lowercase());
+            args.push("--audio-quality".to_string());
+            args.push(audio_quality_arg(audio_quality).to_string());
+            if settings.keep_original {
+                args.push("--keep-video".to_string());
+            }
         }
         DownloadType::VideoOnly => {
             args.push("-f".to_string());
-            args.push("bestvideo".to_string());
+            args.push(format_rule(
+                "Video only",
+                container,
+                video_codec,
+                resolution_cap,
+            ));
         }
         DownloadType::FullVideo => {
             args.push("-f".to_string());
-            args.push(preset.format_rule.clone());
+            args.push(format_rule(
+                format_label,
+                container,
+                video_codec,
+                resolution_cap,
+            ));
             args.push("--merge-output-format".to_string());
             args.push(container.to_lowercase());
         }
+    }
+
+    if settings.embed_thumbnail {
+        args.push("--embed-thumbnail".to_string());
+    }
+    if settings.add_metadata {
+        args.push("--add-metadata".to_string());
+    }
+    if settings.split_chapters {
+        args.push("--split-chapters".to_string());
+    }
+    if settings.replace_unsafe_characters {
+        args.push("--windows-filenames".to_string());
+    }
+    if settings.prevent_overwrites || settings.skip_existing {
+        args.push("--no-overwrites".to_string());
     }
 
     args.push("-P".to_string());
@@ -330,6 +380,25 @@ pub(crate) fn import_url_list(mut ctx: FetchContext) {
 
 #[cfg(not(feature = "desktop"))]
 pub(crate) fn import_url_list(_ctx: FetchContext) {}
+
+#[cfg(feature = "desktop")]
+pub(crate) fn pick_output_folder(mut ctx: FetchContext) {
+    if let Some(path) = rfd::FileDialog::new().pick_folder() {
+        ctx.settings
+            .with_mut(|settings| settings.output_folder = path.display().to_string());
+    }
+}
+
+#[cfg(not(feature = "desktop"))]
+pub(crate) fn pick_output_folder(_ctx: FetchContext) {}
+
+pub(crate) fn open_ready_view(mut ctx: FetchContext) {
+    if (ctx.analysis)().is_some() {
+        ctx.screen.set(Screen::Ready);
+    } else {
+        ctx.screen.set(Screen::Home);
+    }
+}
 
 fn split_list_cells(line: &str) -> Vec<String> {
     let mut cells = Vec::new();
@@ -460,20 +529,23 @@ mod tests {
     #[test]
     fn queue_command_args_include_mode_and_output() {
         let settings = AppSettings::default();
-        let preset = Preset::defaults().remove(0);
-
         let args = queue_command_args(
             "https://example.com/video",
             DownloadType::FullVideo,
             "MP4 1080p",
             "MP3",
+            "320 kbps",
             "MP4",
+            "H.264",
+            "1080p",
             &settings,
-            &preset,
         );
 
         assert!(args.contains(&"-f".to_string()));
-        assert!(args.contains(&preset.format_rule));
+        assert!(args.contains(
+            &"bestvideo[height<=1080][vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]"
+                .to_string()
+        ));
         assert!(args.contains(&"--merge-output-format".to_string()));
         assert!(args.contains(&"mp4".to_string()));
         assert!(args.contains(&"-P".to_string()));
@@ -484,21 +556,23 @@ mod tests {
     #[test]
     fn queue_command_args_support_audio_mode() {
         let settings = AppSettings::default();
-        let preset = Preset::defaults().remove(1);
-
         let args = queue_command_args(
             "https://example.com/audio",
             DownloadType::AudioOnly,
             "Best audio",
             "M4A",
+            "320 kbps",
             "MP4",
+            "H.264",
+            "1080p",
             &settings,
-            &preset,
         );
 
         assert!(args.contains(&"--extract-audio".to_string()));
         assert!(args.contains(&"--audio-format".to_string()));
         assert!(args.contains(&"m4a".to_string()));
+        assert!(args.contains(&"--audio-quality".to_string()));
+        assert!(args.contains(&"320K".to_string()));
         assert_eq!(args.last(), Some(&"https://example.com/audio".to_string()));
     }
 }
