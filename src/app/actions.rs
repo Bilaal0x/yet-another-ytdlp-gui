@@ -29,7 +29,7 @@ pub(crate) fn parse_url_intake(input: &str) -> UrlIntake {
         let cells = split_list_cells(line);
         let mut found_url = false;
         for candidate in &cells {
-            let candidate = normalize_url_candidate(&candidate);
+            let candidate = normalize_url_candidate(candidate);
             if candidate.is_empty() {
                 continue;
             }
@@ -337,6 +337,7 @@ pub(crate) fn queue_command_preview(ctx: FetchContext) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_command_display(
     source_url: &str,
     download_type: DownloadType,
@@ -396,6 +397,7 @@ fn set_preset_field(preset: &mut Preset, field: &str, value: String) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn queue_command_args(
     source_url: &str,
     download_type: DownloadType,
@@ -755,10 +757,12 @@ mod tests {
 
     #[test]
     fn build_download_args_adds_runtime_controls_before_url() {
-        let mut settings = AppSettings::default();
-        settings.retries = 7;
-        settings.concurrent_fragments = 3;
-        settings.speed_limit = "5M".to_string();
+        let settings = AppSettings {
+            retries: 7,
+            concurrent_fragments: 3,
+            speed_limit: "5M".to_string(),
+            ..Default::default()
+        };
         let item = MediaItem {
             title: "Video".to_string(),
             uploader: "Uploader".to_string(),
