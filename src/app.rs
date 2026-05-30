@@ -318,6 +318,7 @@ pub(crate) struct DownloadJob {
     resolution_cap: String,
     output_folder: String,
     output_template: String,
+    command_args: Vec<String>,
     command_display: String,
     status: JobStatus,
     progress: f32,
@@ -479,6 +480,7 @@ pub fn FetchApp() -> Element {
         let mut screen = screen;
         let mut analysis = analysis;
         let mut dependencies = dependencies;
+        let jobs = jobs;
         let mut busy = busy;
         let mut analysis_running = analysis_running;
         let mut last_error = last_error;
@@ -528,7 +530,18 @@ pub fn FetchApp() -> Element {
                         analysis_running.set(false);
                         busy.set(false);
                     }
-                    BackendAction::StartQueue { .. } | BackendAction::RetryFailed { .. } => {}
+                    BackendAction::StartQueue { settings } => {
+                        busy.set(true);
+                        last_error.set(None);
+                        run_queue(jobs, settings, false, last_error).await;
+                        busy.set(false);
+                    }
+                    BackendAction::RetryFailed { settings } => {
+                        busy.set(true);
+                        last_error.set(None);
+                        run_queue(jobs, settings, true, last_error).await;
+                        busy.set(false);
+                    }
                 }
             }
         }

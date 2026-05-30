@@ -5,6 +5,7 @@ mod format;
 mod home;
 mod naming;
 mod playlist;
+mod queue;
 mod ready;
 mod settings;
 
@@ -20,7 +21,7 @@ pub(crate) fn ActiveView() -> Element {
         Screen::Audio => rsx! { audio::AudioView {} },
         Screen::Playlist => rsx! { playlist::PlaylistView {} },
         Screen::Naming => rsx! { naming::NamingView {} },
-        Screen::Queue => rsx! { ScreenPanel { screen: Screen::Queue } },
+        Screen::Queue => rsx! { queue::QueueView {} },
         Screen::Library => rsx! { ScreenPanel { screen: Screen::Library } },
         Screen::Presets => rsx! { ScreenPanel { screen: Screen::Presets } },
         Screen::Advanced => rsx! { ScreenPanel { screen: Screen::Advanced } },
