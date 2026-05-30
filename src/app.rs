@@ -75,12 +75,42 @@ pub(crate) enum DownloadType {
     VideoOnly,
 }
 
+impl DownloadType {
+    fn label(self) -> String {
+        i18n::t(match self {
+            DownloadType::FullVideo => "download_full_video",
+            DownloadType::AudioOnly => "download_audio_only",
+            DownloadType::VideoOnly => "download_video_only",
+        })
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum JobStatus {
     Queued,
     Running,
     Completed,
     Failed,
+}
+
+impl JobStatus {
+    fn label(self) -> String {
+        i18n::t(match self {
+            JobStatus::Queued => "status_queued",
+            JobStatus::Running => "status_running",
+            JobStatus::Completed => "status_completed",
+            JobStatus::Failed => "status_failed",
+        })
+    }
+
+    fn class(self) -> &'static str {
+        match self {
+            JobStatus::Queued => "waiting",
+            JobStatus::Running => "active",
+            JobStatus::Completed => "complete",
+            JobStatus::Failed => "failed",
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
