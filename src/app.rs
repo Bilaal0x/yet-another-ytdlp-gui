@@ -92,7 +92,7 @@ impl DownloadType {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum JobStatus {
     Queued,
     Running,
@@ -120,7 +120,8 @@ impl JobStatus {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct AppSettings {
     language: String,
     output_folder: String,
@@ -150,7 +151,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             language: default_language(),
-            output_folder: "downloads".to_string(),
+            output_folder: default_download_folder(),
             file_template: "%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s".to_string(),
             subtitle_languages: "en,de,und".to_string(),
             write_subtitles: false,
@@ -172,6 +173,34 @@ impl Default for AppSettings {
             concurrent_fragments: 4,
             speed_limit: "Unlimited".to_string(),
         }
+    }
+}
+
+impl AppSettings {
+    fn normalized(mut self) -> Self {
+        let defaults = Self::default();
+
+        if !language_is_available(&self.language) {
+            self.language = defaults.language;
+        }
+        if self.output_folder.trim().is_empty() {
+            self.output_folder = defaults.output_folder;
+        }
+        if self.file_template.trim().is_empty() {
+            self.file_template = defaults.file_template;
+        }
+        if self.subtitle_languages.trim().is_empty() {
+            self.subtitle_languages = defaults.subtitle_languages;
+        }
+        if self.speed_limit.trim().is_empty() {
+            self.speed_limit = defaults.speed_limit;
+        }
+
+        self.retries = self.retries.max(0);
+        self.parallel_jobs = self.parallel_jobs.max(1);
+        self.concurrent_fragments = self.concurrent_fragments.max(1);
+
+        self
     }
 }
 
@@ -303,7 +332,7 @@ pub(crate) struct AnalysisResult {
     warnings: Vec<String>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct DownloadJob {
     id: u64,
     title: String,
@@ -364,7 +393,7 @@ impl DependencyItem {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct AppError {
     title: String,
     message: String,
@@ -447,11 +476,13 @@ impl FetchContext {
 #[component]
 pub fn FetchApp() -> Element {
     let initial_settings = use_hook(|| {
-        let settings = AppSettings::default();
+        let settings = load_settings();
         i18n::init(&settings.language);
         settings
     });
     let initial_preset_store = use_hook(load_preset_store);
+    let initial_library = use_hook(load_library);
+    let initial_next_job_id = next_job_id_after(&initial_library);
 
     let screen = use_signal(|| Screen::Home);
     let download_type = use_signal(|| DownloadType::FullVideo);
@@ -469,7 +500,10 @@ pub fn FetchApp() -> Element {
     let settings = use_signal(move || initial_settings.clone());
     let presets = use_signal(move || initial_preset_store.presets.clone());
     let analysis = use_signal(|| None::<AnalysisResult>);
-    let jobs = use_signal(Vec::<DownloadJob>::new);
+    let jobs = use_signal({
+        let initial_library = initial_library.clone();
+        move || initial_library.clone()
+    });
     let dependencies = use_signal(DependencyReport::default);
     let busy = use_signal(|| false);
     let analysis_running = use_signal(|| false);
@@ -478,7 +512,17 @@ pub fn FetchApp() -> Element {
     let show_debug = use_signal(|| false);
     let library_grid = use_signal(|| true);
     let last_error = use_signal(|| None::<AppError>);
-    let next_job_id = use_signal(|| 1u64);
+    let next_job_id = use_signal(move || initial_next_job_id);
+
+    use_effect(move || {
+        let current_settings = settings();
+        persist_settings(&current_settings);
+    });
+
+    use_effect(move || {
+        let current_jobs = jobs();
+        persist_library(&current_jobs);
+    });
 
     let backend = use_coroutine(move |mut rx: UnboundedReceiver<BackendAction>| {
         let mut screen = screen;
