@@ -1,0 +1,174 @@
+name: build
+
+on:
+  push:
+    branches: [main, develop]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to create or update when running manually"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  DIOXUS_CLI_VERSION: 0.7.9
+  DIOXUS_CLI_TARGET: x86_64-pc-windows-msvc
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  desktop:
+    name: Windows desktop
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-build
+
+      - name: Check desktop app
+        run: cargo check --locked --features desktop
+
+      - name: Test desktop app
+        run: cargo test --locked --features desktop
+
+      - name: Build desktop app
+        run: cargo build --locked --features desktop
+
+  windows-release:
+    name: Windows release
+    runs-on: windows-latest
+    needs: desktop
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+
+      - name: Cache Dioxus CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dx.exe
+          key: ${{ runner.os }}-dx-${{ env.DIOXUS_CLI_VERSION }}
+
+      - name: Cache Dioxus tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.dx/tools
+          key: ${{ runner.os }}-dx-tools-${{ env.DIOXUS_CLI_VERSION }}
+
+      - name: Install Dioxus CLI
+        shell: pwsh
+        run: |
+          $binDir = Join-Path $env:USERPROFILE ".cargo\bin"
+          $dxPath = Join-Path $binDir "dx.exe"
+
+          if (-not (Test-Path -LiteralPath $dxPath)) {
+            $archive = Join-Path $env:RUNNER_TEMP "dx.zip"
+            $tag = "v$env:DIOXUS_CLI_VERSION"
+            $downloadUrl = "https://github.com/DioxusLabs/dioxus/releases/download/$tag/dx-$env:DIOXUS_CLI_TARGET.zip"
+
+            New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
+            Expand-Archive -Path $archive -DestinationPath $binDir -Force
+          }
+
+          Add-Content -Path $env:GITHUB_PATH -Value $binDir
+          & $dxPath --version
+
+      - name: Build Windows app
+        shell: pwsh
+        run: dx build --release --desktop --locked
+
+      - name: Stage Windows app artifact
+        shell: pwsh
+        run: |
+          $sourceDir = Join-Path $PWD "target/dx/yaydlp/release/windows/app"
+          $sourceExe = Join-Path $sourceDir "yaydlp.exe"
+          if (-not (Test-Path -LiteralPath $sourceExe)) {
+            Get-ChildItem -LiteralPath (Join-Path $PWD "target/dx") -Recurse | ForEach-Object { $_.FullName }
+            throw "Dioxus build output is missing yaydlp.exe."
+          }
+
+          $externalFiles = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File | Where-Object { $_.Name -ne "yaydlp.exe" })
+          if ($externalFiles.Count -ne 0) {
+            $externalFiles | ForEach-Object { $_.FullName }
+            throw "Dioxus build output is not self-contained. Inline or embed these files before publishing a single exe."
+          }
+
+          $distDir = Join-Path $PWD "dist"
+          $releaseExe = Join-Path $distDir "yaydlp-windows-x64.exe"
+
+          if (Test-Path -LiteralPath $distDir) {
+            Remove-Item -LiteralPath $distDir -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+          Copy-Item -LiteralPath $sourceExe -Destination $releaseExe -Force
+
+      - name: Verify release artifact
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -LiteralPath dist -File)
+          if ($files.Count -ne 1 -or $files[0].Name -ne "yaydlp-windows-x64.exe") {
+            Get-ChildItem -LiteralPath dist -Recurse | ForEach-Object { $_.FullName }
+            throw "Expected dist to contain only yaydlp-windows-x64.exe."
+          }
+
+          if ($files[0].Length -le 0) {
+            throw "yaydlp-windows-x64.exe is empty."
+          }
+
+          "Executable: $($files[0].FullName)"
+
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $tag = if ($env:REF_TYPE -eq "tag") { $env:REF_NAME } else { $env:INPUT_RELEASE_TAG }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw "Run this workflow from a tag or provide a release_tag workflow_dispatch input."
+          }
+
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+
+      - name: Attach app to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: dist/yaydlp-windows-x64.exe
