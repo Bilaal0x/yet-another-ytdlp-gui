@@ -149,7 +149,7 @@ pub(crate) fn locale_store_path() -> PathBuf {
 
 pub(crate) fn default_download_folder() -> String {
     env::var("USERPROFILE")
-        .map(|home| format!("{home}\\Downloads\\YAMDL"))
+        .map(|home| format!("{home}\\Downloads\\YAYDLP"))
         .unwrap_or_else(|_| "downloads".to_string())
 }
 
