@@ -1311,6 +1311,7 @@ input[type="range"] {
 
 .dependency-cards {
     gap: 10px;
+    min-width: 0;
 }
 
 .settings-actions {
@@ -1331,9 +1332,12 @@ input[type="range"] {
 .dependency-card {
     display: grid;
     gap: 4px;
+    min-width: 0;
+    max-width: 100%;
     padding: 12px;
     border: 1px solid var(--line-soft);
     border-radius: 8px;
+    overflow: hidden;
 }
 
 .dependency-card.ok {
@@ -1352,6 +1356,14 @@ input[type="range"] {
 
 .dependency-card span {
     color: var(--muted);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.dependency-card strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .extra-flags {
