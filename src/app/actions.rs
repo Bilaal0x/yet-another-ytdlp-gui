@@ -164,8 +164,9 @@ pub(crate) fn build_job(
     resolution_cap: &str,
     settings: &AppSettings,
 ) -> DownloadJob {
-    let command_args = queue_command_args(
-        &item.url,
+    let queue_source = item.queue_source();
+    let command_args = queue_command_args_for_source(
+        &queue_source,
         download_type,
         format_label,
         audio_format,
@@ -180,7 +181,7 @@ pub(crate) fn build_job(
     DownloadJob {
         id,
         title: item.title,
-        source_url: item.url,
+        source_url: queue_source.url().to_string(),
         thumbnail: item.thumbnail,
         download_type,
         format_label: format_label.to_string(),
@@ -312,16 +313,30 @@ pub(crate) fn select_first_n(mut ctx: FetchContext, count: usize) {
 
 pub(crate) fn queue_command_preview(ctx: FetchContext) -> String {
     let settings = ctx.settings();
-    let url = (ctx.analysis)()
-        .and_then(|analysis| {
-            analysis
-                .items
-                .iter()
-                .find(|item| item.selected)
-                .or_else(|| analysis.items.first())
-                .map(|item| item.url.clone())
-        })
-        .or_else(|| parse_urls(&(ctx.url_text)()).first().cloned())
+    if let Some(source) = (ctx.analysis)().and_then(|analysis| {
+        analysis
+            .items
+            .iter()
+            .find(|item| item.selected)
+            .or_else(|| analysis.items.first())
+            .map(MediaItem::queue_source)
+    }) {
+        return queue_command_display_for_source(
+            &source,
+            (ctx.download_type)(),
+            &(ctx.selected_format)(),
+            &(ctx.selected_audio_format)(),
+            &(ctx.audio_quality)(),
+            &(ctx.container)(),
+            &(ctx.video_codec)(),
+            &(ctx.resolution_cap)(),
+            &settings,
+        );
+    }
+
+    let url = parse_urls(&(ctx.url_text)())
+        .first()
+        .cloned()
         .unwrap_or_else(|| "https://example.com/video".to_string());
 
     queue_command_display(
@@ -349,8 +364,10 @@ pub(crate) fn queue_command_display(
     resolution_cap: &str,
     settings: &AppSettings,
 ) -> String {
-    yt_dlp_command_display(&queue_command_args(
-        source_url,
+    queue_command_display_for_source(
+        &QueueSource::Direct {
+            url: source_url.to_string(),
+        },
         download_type,
         format_label,
         audio_format,
@@ -359,7 +376,7 @@ pub(crate) fn queue_command_display(
         video_codec,
         resolution_cap,
         settings,
-    ))
+    )
 }
 
 pub(crate) fn build_download_args(job: &DownloadJob, settings: &AppSettings) -> Vec<String> {
@@ -409,6 +426,58 @@ fn queue_command_args(
     resolution_cap: &str,
     settings: &AppSettings,
 ) -> Vec<String> {
+    queue_command_args_for_source(
+        &QueueSource::Direct {
+            url: source_url.to_string(),
+        },
+        download_type,
+        format_label,
+        audio_format,
+        audio_quality,
+        container,
+        video_codec,
+        resolution_cap,
+        settings,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn queue_command_display_for_source(
+    source: &QueueSource,
+    download_type: DownloadType,
+    format_label: &str,
+    audio_format: &str,
+    audio_quality: &str,
+    container: &str,
+    video_codec: &str,
+    resolution_cap: &str,
+    settings: &AppSettings,
+) -> String {
+    yt_dlp_command_display(&queue_command_args_for_source(
+        source,
+        download_type,
+        format_label,
+        audio_format,
+        audio_quality,
+        container,
+        video_codec,
+        resolution_cap,
+        settings,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn queue_command_args_for_source(
+    source: &QueueSource,
+    download_type: DownloadType,
+    format_label: &str,
+    audio_format: &str,
+    audio_quality: &str,
+    container: &str,
+    video_codec: &str,
+    resolution_cap: &str,
+    settings: &AppSettings,
+) -> Vec<String> {
     let mut args = vec![
         "--newline".to_string(),
         "--no-update".to_string(),
@@ -416,6 +485,7 @@ fn queue_command_args(
         "utf-8".to_string(),
     ];
     add_common_network_args(&mut args, settings);
+    add_queue_source_args(&mut args, source);
 
     match download_type {
         DownloadType::AudioOnly => {
@@ -486,9 +556,21 @@ fn queue_command_args(
     args.push(settings.output_folder.clone());
     args.push("-o".to_string());
     args.push(settings.file_template.clone());
-    args.push(source_url.to_string());
+    args.push(source.url().to_string());
 
     args
+}
+
+fn add_queue_source_args(args: &mut Vec<String>, source: &QueueSource) {
+    match source {
+        QueueSource::Direct { .. } => {
+            args.push("--no-playlist".to_string());
+        }
+        QueueSource::PlaylistItem { index, .. } => {
+            args.push("--playlist-items".to_string());
+            args.push(index.to_string());
+        }
+    }
 }
 
 #[cfg(feature = "desktop")]
@@ -727,6 +809,7 @@ mod tests {
         ));
         assert!(args.contains(&"--merge-output-format".to_string()));
         assert!(args.contains(&"mp4".to_string()));
+        assert!(args.contains(&"--no-playlist".to_string()));
         assert!(args.contains(&"-P".to_string()));
         assert!(args.contains(&settings.output_folder));
         assert_eq!(args.last(), Some(&"https://example.com/video".to_string()));
@@ -748,11 +831,89 @@ mod tests {
         );
 
         assert!(args.contains(&"--extract-audio".to_string()));
+        assert!(args.contains(&"--no-playlist".to_string()));
         assert!(args.contains(&"--audio-format".to_string()));
         assert!(args.contains(&"m4a".to_string()));
         assert!(args.contains(&"--audio-quality".to_string()));
         assert!(args.contains(&"320K".to_string()));
         assert_eq!(args.last(), Some(&"https://example.com/audio".to_string()));
+    }
+
+    #[test]
+    fn queue_command_args_support_playlist_item_sources() {
+        let settings = AppSettings {
+            cookie_file: "cookies.txt".to_string(),
+            proxy: "socks5://localhost:9000".to_string(),
+            ..Default::default()
+        };
+        let source = QueueSource::PlaylistItem {
+            playlist_url: "https://example.com/playlist".to_string(),
+            index: 7,
+        };
+
+        let args = queue_command_args_for_source(
+            &source,
+            DownloadType::FullVideo,
+            "MP4 1080p",
+            "MP3",
+            "320 kbps",
+            "MP4",
+            "H.264",
+            "1080p",
+            &settings,
+        );
+
+        assert!(args.contains(&"--cookies".to_string()));
+        assert!(args.contains(&"cookies.txt".to_string()));
+        assert!(args.contains(&"--proxy".to_string()));
+        assert!(args.contains(&"socks5://localhost:9000".to_string()));
+        assert!(args.contains(&"--playlist-items".to_string()));
+        assert!(args.contains(&"7".to_string()));
+        assert!(!args.contains(&"--no-playlist".to_string()));
+        assert_eq!(
+            args.last(),
+            Some(&"https://example.com/playlist".to_string())
+        );
+    }
+
+    #[test]
+    fn build_job_uses_playlist_selector_for_playlist_items() {
+        let settings = AppSettings::default();
+        let item = MediaItem {
+            title: "Playlist video".to_string(),
+            uploader: "Uploader".to_string(),
+            url: "https://example.com/watch".to_string(),
+            entry_url: Some("https://example.com/watch".to_string()),
+            playlist_url: Some("https://example.com/playlist".to_string()),
+            playlist_index: Some(3),
+            duration: "1:00".to_string(),
+            thumbnail: String::new(),
+            format_count: 1,
+            estimated_size: "1 MB".to_string(),
+            selected: true,
+        };
+
+        let job = build_job(
+            1,
+            item,
+            DownloadType::FullVideo,
+            "MP4 1080p",
+            "MP3",
+            "320 kbps",
+            "MP4",
+            "H.264",
+            "1080p",
+            &settings,
+        );
+
+        assert_eq!(job.source_url, "https://example.com/playlist");
+        assert!(job.command_args.contains(&"--playlist-items".to_string()));
+        assert!(job.command_args.contains(&"3".to_string()));
+        assert!(!job.command_args.contains(&"--no-playlist".to_string()));
+        assert_eq!(
+            job.command_args.last(),
+            Some(&"https://example.com/playlist".to_string())
+        );
     }
 
     #[test]
@@ -767,6 +928,9 @@ mod tests {
             title: "Video".to_string(),
             uploader: "Uploader".to_string(),
             url: "https://example.com/video".to_string(),
+            entry_url: Some("https://example.com/video".to_string()),
+            playlist_url: None,
+            playlist_index: None,
             duration: "1:00".to_string(),
             thumbnail: String::new(),
             format_count: 1,
