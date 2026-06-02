@@ -1030,10 +1030,10 @@ input[type="range"] {
 .playlist-head,
 .playlist-row {
     display: grid;
-    grid-template-columns: 42px minmax(260px, 1fr) 92px 110px 130px;
+    grid-template-columns: 42px minmax(260px, 1fr) minmax(140px, 0.55fr) 92px 110px 130px;
     align-items: center;
     gap: 12px;
-    min-width: 760px;
+    min-width: 900px;
     padding: 12px 14px;
 }
 

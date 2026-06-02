@@ -317,6 +317,9 @@ pub(crate) struct MediaItem {
     title: String,
     uploader: String,
     url: String,
+    entry_url: Option<String>,
+    playlist_url: Option<String>,
+    playlist_index: Option<usize>,
     duration: String,
     thumbnail: String,
     format_count: usize,
@@ -324,12 +327,53 @@ pub(crate) struct MediaItem {
     selected: bool,
 }
 
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub(crate) enum AnalysisKind {
+    Single,
+    Playlist,
+    Batch,
+}
+
 #[derive(Clone, PartialEq)]
 pub(crate) struct AnalysisResult {
+    kind: AnalysisKind,
     source_label: String,
+    source_title: String,
+    source_url: String,
+    item_count: usize,
     items: Vec<MediaItem>,
     command: String,
     warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum QueueSource {
+    Direct { url: String },
+    PlaylistItem { playlist_url: String, index: usize },
+}
+
+impl QueueSource {
+    fn url(&self) -> &str {
+        match self {
+            Self::Direct { url } => url,
+            Self::PlaylistItem { playlist_url, .. } => playlist_url,
+        }
+    }
+}
+
+impl MediaItem {
+    fn queue_source(&self) -> QueueSource {
+        if let (Some(playlist_url), Some(index)) = (&self.playlist_url, self.playlist_index) {
+            return QueueSource::PlaylistItem {
+                playlist_url: playlist_url.clone(),
+                index,
+            };
+        }
+
+        QueueSource::Direct {
+            url: self.entry_url.clone().unwrap_or_else(|| self.url.clone()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -560,7 +604,9 @@ pub fn FetchApp() -> Element {
                         .await
                         {
                             Ok(Some(result)) => {
-                                let next_screen = if result.items.len() > 1 {
+                                let next_screen = if result.kind == AnalysisKind::Playlist
+                                    || result.items.len() > 1
+                                {
                                     Screen::Playlist
                                 } else {
                                     Screen::Ready

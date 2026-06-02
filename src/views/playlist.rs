@@ -17,6 +17,8 @@ pub(super) fn PlaylistView() -> Element {
                     ("total", result.items.len().to_string()),
                 ],
             );
+            let item_count =
+                i18n::t_with("item_count", &[("count", result.item_count.to_string())]);
             let settings = ctx.settings();
 
             rsx! {
@@ -25,9 +27,10 @@ pub(super) fn PlaylistView() -> Element {
                         div { class: "list-header",
                             div {
                                 div { class: "eyebrow", "{i18n::t(\"analyzed_items\")}" }
-                                h2 { "{result.source_label}" }
+                                h2 { "{result.source_title}" }
                             }
                             div { class: "table-tools",
+                                span { class: "summary-chip", "{item_count}" }
                                 button { class: "ghost-button", onclick: move |_| set_all_analysis_items(ctx, true), "{i18n::t(\"select_all\")}" }
                                 button { class: "ghost-button", onclick: move |_| set_all_analysis_items(ctx, false), "{i18n::t(\"select_none\")}" }
                                 button { class: "ghost-button", onclick: move |_| select_first_n(ctx, 10), "{i18n::t(\"first_10\")}" }
@@ -38,6 +41,7 @@ pub(super) fn PlaylistView() -> Element {
                             div { class: "playlist-head",
                                 span { "" }
                                 span { "{i18n::t(\"table_title\")}" }
+                                span { "{i18n::t(\"uploader\")}" }
                                 span { "{i18n::t(\"table_duration\")}" }
                                 span { "{i18n::t(\"table_formats\")}" }
                                 span { "{i18n::t(\"table_estimate\")}" }
@@ -71,7 +75,8 @@ pub(super) fn PlaylistView() -> Element {
                             div { class: "eyebrow", "{i18n::t(\"selection\")}" }
                             h3 { "{selected_count}" }
                         }
-                        StatBlock { label: i18n::t("source"), value: result.source_label }
+                        StatBlock { label: i18n::t("source"), value: result.source_url }
+                        StatBlock { label: i18n::t("table_title"), value: result.source_label }
                         StatBlock { label: i18n::t("output"), value: settings.output_folder }
                         button {
                             class: "primary-button full",
