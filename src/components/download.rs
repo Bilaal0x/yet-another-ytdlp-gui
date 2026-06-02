@@ -131,6 +131,7 @@ pub(crate) fn PlaylistRow(index: usize, item: MediaItem) -> Element {
                 }
                 strong { "{item.title}" }
             }
+            span { "{item.uploader}" }
             span { "{item.duration}" }
             span { "{item.format_count}" }
             span { "{item.estimated_size}" }

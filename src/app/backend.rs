@@ -137,6 +137,7 @@ pub(crate) async fn analyze_urls(
     ensure_ytdlp_dependencies().await?;
 
     let mut items = Vec::new();
+    let mut parsed_sources = Vec::new();
     let mut warnings = Vec::new();
 
     for url in &urls {
@@ -175,7 +176,8 @@ pub(crate) async fn analyze_urls(
         if parsed.is_empty() {
             warnings.push(i18n::t_with("no_entries_found", &[("url", url.clone())]));
         }
-        items.extend(parsed);
+        items.extend(parsed.items.iter().cloned());
+        parsed_sources.push(parsed);
     }
 
     if items.is_empty() {
@@ -186,12 +188,33 @@ pub(crate) async fn analyze_urls(
         ));
     }
 
-    Ok(Some(AnalysisResult {
-        source_label: if items.len() > 1 {
-            i18n::t_with("analyzed_item_count", &[("count", items.len().to_string())])
+    let (kind, source_title, source_url, item_count) =
+        if urls.len() == 1 && parsed_sources.len() == 1 {
+            let source = parsed_sources.remove(0);
+            (
+                source.kind,
+                source.source_title,
+                source.source_url,
+                source.item_count,
+            )
         } else {
-            items[0].title.clone()
-        },
+            let label = i18n::t_with("analyzed_item_count", &[("count", items.len().to_string())]);
+            (AnalysisKind::Batch, label, urls.join("\n"), items.len())
+        };
+    let source_label = match kind {
+        AnalysisKind::Single => items[0].title.clone(),
+        AnalysisKind::Playlist => source_title.clone(),
+        AnalysisKind::Batch => {
+            i18n::t_with("analyzed_item_count", &[("count", items.len().to_string())])
+        }
+    };
+
+    Ok(Some(AnalysisResult {
+        kind,
+        source_label,
+        source_title,
+        source_url,
+        item_count,
         items,
         command: yt_dlp_command_display(&build_analysis_args(&urls[0], settings)),
         warnings,
@@ -586,19 +609,86 @@ pub(crate) fn add_common_network_args(args: &mut Vec<String>, settings: &AppSett
     }
 }
 
-pub(crate) fn parse_analysis_json(json: &Value, fallback_url: &str) -> Vec<MediaItem> {
+#[derive(Clone, PartialEq)]
+pub(crate) struct ParsedAnalysisSource {
+    kind: AnalysisKind,
+    source_title: String,
+    source_url: String,
+    item_count: usize,
+    items: Vec<MediaItem>,
+}
+
+impl ParsedAnalysisSource {
+    fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
+pub(crate) fn parse_analysis_json(json: &Value, fallback_url: &str) -> ParsedAnalysisSource {
     if let Some(entries) = json.get("entries").and_then(Value::as_array) {
-        entries
+        let source_url = source_url_from_json(json, fallback_url);
+        let source_title = playlist_title(json).unwrap_or_else(|| source_url.clone());
+        let items: Vec<MediaItem> = entries
             .iter()
             .filter(|entry| !entry.is_null())
-            .map(|entry| media_item_from_json(entry, fallback_url))
-            .collect()
+            .filter_map(|entry| media_item_from_playlist_entry(entry, &source_url))
+            .collect();
+        let item_count = items.len();
+
+        ParsedAnalysisSource {
+            kind: AnalysisKind::Playlist,
+            source_title,
+            source_url,
+            item_count,
+            items,
+        }
     } else {
-        vec![media_item_from_json(json, fallback_url)]
+        let item = media_item_from_json(json, fallback_url);
+        ParsedAnalysisSource {
+            kind: AnalysisKind::Single,
+            source_title: item.title.clone(),
+            source_url: item.url.clone(),
+            item_count: 1,
+            items: vec![item],
+        }
     }
 }
 
 pub(crate) fn media_item_from_json(json: &Value, fallback_url: &str) -> MediaItem {
+    let url = direct_entry_url(json).unwrap_or_else(|| fallback_url.to_string());
+
+    media_item_from_parts(json, url.clone(), Some(url), None, None)
+}
+
+fn media_item_from_playlist_entry(json: &Value, playlist_url: &str) -> Option<MediaItem> {
+    let entry_url = direct_entry_url(json);
+    let playlist_index = playlist_index(json);
+
+    if entry_url.is_none() && playlist_index.is_none() {
+        return None;
+    }
+
+    let display_url = entry_url
+        .clone()
+        .unwrap_or_else(|| playlist_url.to_string());
+    let queue_playlist_url = playlist_index.map(|_| playlist_url.to_string());
+
+    Some(media_item_from_parts(
+        json,
+        display_url,
+        entry_url,
+        queue_playlist_url,
+        playlist_index,
+    ))
+}
+
+fn media_item_from_parts(
+    json: &Value,
+    url: String,
+    entry_url: Option<String>,
+    playlist_url: Option<String>,
+    playlist_index: Option<usize>,
+) -> MediaItem {
     let title = json
         .get("title")
         .and_then(Value::as_str)
@@ -610,13 +700,6 @@ pub(crate) fn media_item_from_json(json: &Value, fallback_url: &str) -> MediaIte
         .and_then(Value::as_str)
         .map(ToString::to_string)
         .unwrap_or_else(|| i18n::t("unknown"));
-    let url = json
-        .get("webpage_url")
-        .or_else(|| json.get("original_url"))
-        .or_else(|| json.get("url"))
-        .and_then(Value::as_str)
-        .unwrap_or(fallback_url)
-        .to_string();
     let duration = json
         .get("duration")
         .and_then(Value::as_f64)
@@ -639,12 +722,65 @@ pub(crate) fn media_item_from_json(json: &Value, fallback_url: &str) -> MediaIte
         title,
         uploader,
         url,
+        entry_url,
+        playlist_url,
+        playlist_index,
         duration,
         thumbnail,
         format_count,
         estimated_size,
         selected: true,
     }
+}
+
+fn playlist_title(json: &Value) -> Option<String> {
+    string_field(json, &["title", "playlist_title", "playlist"])
+}
+
+fn source_url_from_json(json: &Value, fallback_url: &str) -> String {
+    string_field(json, &["webpage_url", "original_url"])
+        .filter(|url| is_http_url(url))
+        .unwrap_or_else(|| fallback_url.to_string())
+}
+
+fn direct_entry_url(json: &Value) -> Option<String> {
+    string_field(json, &["webpage_url", "original_url", "url"]).filter(|url| is_http_url(url))
+}
+
+fn string_field(json: &Value, fields: &[&str]) -> Option<String> {
+    fields.iter().find_map(|field| {
+        json.get(*field)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+    })
+}
+
+fn playlist_index(json: &Value) -> Option<usize> {
+    ["playlist_index", "playlist_autonumber"]
+        .iter()
+        .find_map(|field| positive_usize_field(json, field))
+}
+
+fn positive_usize_field(json: &Value, field: &str) -> Option<usize> {
+    let value = json.get(field)?;
+    let parsed = value.as_u64().or_else(|| {
+        value
+            .as_str()
+            .and_then(|raw| raw.trim().parse::<u64>().ok())
+    })?;
+
+    usize::try_from(parsed).ok().filter(|index| *index > 0)
+}
+
+fn is_http_url(value: &str) -> bool {
+    if value.chars().any(char::is_whitespace) {
+        return false;
+    }
+
+    let lower = value.to_ascii_lowercase();
+    lower.starts_with("https://") || lower.starts_with("http://")
 }
 
 pub(crate) fn managed_binary_paths() -> BinaryPaths {
@@ -942,6 +1078,12 @@ mod tests {
         assert_eq!(item.title, "A video");
         assert_eq!(item.uploader, "A channel");
         assert_eq!(item.url, "https://example.com/watch");
+        assert_eq!(
+            item.entry_url,
+            Some("https://example.com/watch".to_string())
+        );
+        assert_eq!(item.playlist_url, None);
+        assert_eq!(item.playlist_index, None);
         assert_eq!(item.duration, "2:05");
         assert_eq!(item.thumbnail, "https://example.com/thumb.jpg");
         assert_eq!(item.format_count, 2);
@@ -950,24 +1092,71 @@ mod tests {
     }
 
     #[test]
-    fn parses_playlist_entries_and_skips_null_items() {
-        let items = parse_analysis_json(
+    fn parses_playlist_metadata_entries_and_skips_unqueueable_items() {
+        let parsed = parse_analysis_json(
             &json!({
+                "title": "A playlist",
+                "webpage_url": "https://example.com/playlist",
                 "entries": [
                     null,
-                    { "title": "One", "channel": "Uploader", "duration": 3661, "url": "https://example.com/one" },
-                    { "title": "Two", "formats": [{ "filesize": 1_500_000_000u64 }] }
+                    { "title": "One", "channel": "Uploader", "duration": 3661, "webpage_url": "https://example.com/one", "playlist_index": 2 },
+                    { "title": "Missing URL", "channel": "Skipped" },
+                    { "title": "Two", "playlist_index": "4", "formats": [{ "filesize": 1_500_000_000u64 }] }
                 ]
             }),
             "https://fallback.test",
         );
 
+        assert_eq!(parsed.kind, AnalysisKind::Playlist);
+        assert_eq!(parsed.source_title, "A playlist");
+        assert_eq!(parsed.source_url, "https://example.com/playlist");
+        assert_eq!(parsed.item_count, 2);
+        let items = parsed.items;
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].title, "One");
         assert_eq!(items[0].uploader, "Uploader");
         assert_eq!(items[0].duration, "1:01:01");
-        assert_eq!(items[1].url, "https://fallback.test");
+        assert_eq!(
+            items[0].entry_url,
+            Some("https://example.com/one".to_string())
+        );
+        assert_eq!(
+            items[0].playlist_url,
+            Some("https://example.com/playlist".to_string())
+        );
+        assert_eq!(items[0].playlist_index, Some(2));
+        assert_eq!(items[1].url, "https://example.com/playlist");
+        assert_eq!(items[1].entry_url, None);
+        assert_eq!(
+            items[1].playlist_url,
+            Some("https://example.com/playlist".to_string())
+        );
+        assert_eq!(items[1].playlist_index, Some(4));
         assert_eq!(items[1].estimated_size, "1.5 GB");
+    }
+
+    #[test]
+    fn playlist_entries_without_index_use_direct_urls_only() {
+        let parsed = parse_analysis_json(
+            &json!({
+                "title": "Direct entries",
+                "webpage_url": "https://example.com/playlist",
+                "entries": [
+                    { "title": "Direct", "webpage_url": "https://example.com/direct" },
+                    { "title": "Flat id", "url": "abc123" }
+                ]
+            }),
+            "https://fallback.test",
+        );
+
+        assert_eq!(parsed.items.len(), 1);
+        assert_eq!(parsed.items[0].url, "https://example.com/direct");
+        assert_eq!(
+            parsed.items[0].entry_url,
+            Some("https://example.com/direct".to_string())
+        );
+        assert_eq!(parsed.items[0].playlist_url, None);
+        assert_eq!(parsed.items[0].playlist_index, None);
     }
 
     #[test]
