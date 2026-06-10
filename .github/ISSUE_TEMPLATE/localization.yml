@@ -1,0 +1,68 @@
+name: Localization
+description: Add a new language or improve existing translations.
+title: "i18n: "
+labels: ["type:docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make yaydlp easier to use in more languages. If you plan to submit a pull request, see the translation guide in the README first.
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - Add a new language
+        - Improve an existing translation
+        - Report a typo or awkward string
+        - Ask a translation question
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: Include the language name and code if you know it.
+      placeholder: German / de
+    validations:
+      required: true
+
+  - type: textarea
+    id: strings
+    attributes:
+      label: Strings or screens involved
+      description: List the affected UI text, Fluent keys, or screens.
+      placeholder: |
+        screen_queue
+        start_queue
+        Queue screen button labels
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested translation or change
+      description: Share the wording you recommend, or describe what should be changed.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Add screenshots, cultural notes, formality preferences, or pluralization details that would help reviewers.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked the README translation guide.
+          required: true
+        - label: I preserved placeholders such as `{ $count }`, `{ $title }`, and `{ $path }` in any suggested translations.
+          required: false
